@@ -7,10 +7,15 @@ import (
 	"encoding/binary"
 	"io"
 	"strconv"
+
+	"github.com/codahale/chacha20"
+
+	"code.google.com/p/go.crypto/curve25519"
+	"code.google.com/p/go.crypto/poly1305"
 )
 
 type Ciphersuite interface {
-	Name() [24]byte
+	Name() []byte
 	DHLen() int
 	CCLen() int
 	MACLen() int
@@ -79,4 +84,68 @@ func NoiseBox(c Ciphersuite, dst []byte, ephKey, senderKey Key, recvrPubkey []by
 
 	header := cc1.Encrypt(ephKey.Public, ephKey.Public, senderKey.Public)
 	return noiseBody(cc2, header, padLen, appData, header), cv2
+}
+
+type Noise255 struct{}
+
+func (Noise255) Name() []byte { return []byte("Noise255") }
+func (Noise255) DHLen() int   { return 32 }
+func (Noise255) CCLen() int   { return 40 }
+func (Noise255) MACLen() int  { return 16 }
+
+func (Noise255) DH(privkey, pubkey []byte) []byte {
+	var dst, in, base [32]byte
+	copy(in[:], privkey)
+	copy(base[:], pubkey)
+	curve25519.ScalarMult(&dst, &in, &base)
+	return dst[:]
+}
+
+func (Noise255) NewCipher(cv []byte) CipherContext {
+	return &noise255{cv}
+}
+
+type noise255 struct {
+	cc []byte
+}
+
+func (n *noise255) Encrypt(dst, authtext, plaintext []byte) []byte {
+	cipherKey := n.cc[:32]
+	iv := n.cc[32:40]
+
+	c, err := chacha20.NewCipher(cipherKey, iv)
+	if err != nil {
+		panic(err)
+	}
+
+	keystream := make([]byte, 128)
+	c.XORKeyStream(keystream, keystream)
+
+	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
+	c.XORKeyStream(ciphertext, plaintext)
+
+	var macKey [32]byte
+	var mac [16]byte
+	copy(macKey[:], keystream)
+	poly1305.Sum(&mac, n.authData(authtext, plaintext), &macKey)
+
+	n.cc = keystream[64:104]
+	return append(dst, append(ciphertext, mac[:]...)...)
+}
+
+func (noise255) authData(authtext, plaintext []byte) []byte {
+	// PAD16(authtext) || PAD16(plaintext) || (uint64)len(authtext) || (uint64)len(plaintext)
+	authData := make([]byte, pad16len(len(authtext))+pad16len(len(plaintext))+8+8)
+	copy(authData, authtext)
+	offset := pad16len(len(authtext))
+	copy(authData[offset:], plaintext)
+	offset += pad16len(len(plaintext))
+	binary.BigEndian.PutUint64(authData[offset:], uint64(len(authtext)))
+	offset += 8
+	binary.BigEndian.PutUint64(authData[offset:], uint64(len(plaintext)))
+	return authData
+}
+
+func pad16len(l int) int {
+	return l + (16 - (l % 16))
 }
