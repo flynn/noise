@@ -1,17 +1,19 @@
 package box
 
 import (
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strconv"
 
-	"github.com/codahale/chacha20"
-
 	"code.google.com/p/go.crypto/curve25519"
 	"code.google.com/p/go.crypto/poly1305"
+	"github.com/codahale/chacha20"
 )
 
 type Ciphersuite interface {
@@ -19,6 +21,7 @@ type Ciphersuite interface {
 	DHLen() int
 	CCLen() int
 	MACLen() int
+	GenerateKey(io.Reader) (Key, error)
 
 	DH(privkey, pubkey []byte) []byte
 	NewCipher(cv []byte) CipherContext
@@ -26,6 +29,7 @@ type Ciphersuite interface {
 
 type CipherContext interface {
 	Encrypt(dst, authtext, plaintext []byte) []byte
+	Decrypt(authtext, ciphertext []byte) ([]byte, error)
 }
 
 func deriveKey(secret, extraData, info []byte, outputLen int) []byte {
@@ -67,33 +71,97 @@ func noiseBody(cc CipherContext, dst []byte, padLen int, appData, header []byte)
 	return cc.Encrypt(dst, header, plaintext)
 }
 
-func NoiseBox(c Ciphersuite, dst []byte, ephKey, senderKey Key, recvrPubkey []byte, padLen int, appData []byte, kdfNum int, cv []byte) ([]byte, []byte) {
-	if len(cv) == 0 {
-		cv = make([]byte, cvLen)
-	}
-
-	dh1 := c.DH(ephKey.Private, recvrPubkey)
-	dh2 := c.DH(senderKey.Private, recvrPubkey)
-
-	name := c.Name()
-	cv1 := deriveKey(dh1, cv, strconv.AppendInt(name[:], int64(kdfNum), 10), cvLen+c.CCLen())
-	cv2 := deriveKey(dh2, cv1, strconv.AppendInt(name[:], int64(kdfNum+1), 10), cvLen+c.CCLen())
-
-	cc1 := c.NewCipher(cv1)
-	cc2 := c.NewCipher(cv2)
-
-	header := cc1.Encrypt(ephKey.Public, ephKey.Public, senderKey.Public)
-	return noiseBody(cc2, header, padLen, appData, header), cv2
+type Crypter struct {
+	Cipher      Ciphersuite
+	SenderKey   Key
+	ReceiverKey Key
+	ChainVar    []byte
+	KDFNum      int
 }
 
-type Noise255 struct{}
+func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int) ([]byte, error) {
+	if len(c.ChainVar) == 0 {
+		c.ChainVar = make([]byte, cvLen)
+	}
+	if ephKey == nil {
+		k, err := c.Cipher.GenerateKey(rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+		ephKey = &k
+	}
 
-func (Noise255) Name() []byte { return []byte("Noise255") }
-func (Noise255) DHLen() int   { return 32 }
-func (Noise255) CCLen() int   { return 40 }
-func (Noise255) MACLen() int  { return 16 }
+	dh1 := c.Cipher.DH(ephKey.Private, c.ReceiverKey.Public)
+	dh2 := c.Cipher.DH(c.SenderKey.Private, c.ReceiverKey.Public)
 
-func (Noise255) DH(privkey, pubkey []byte) []byte {
+	cv1 := c.deriveKey(dh1, c.ChainVar)
+	c.ChainVar = c.deriveKey(dh2, cv1)
+
+	cc1 := c.Cipher.NewCipher(cv1)
+	cc2 := c.Cipher.NewCipher(c.ChainVar)
+
+	header := cc1.Encrypt(ephKey.Public, ephKey.Public, c.SenderKey.Public)
+	return noiseBody(cc2, header, padLen, plaintext, header), nil
+}
+
+func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
+	if len(c.ChainVar) == 0 {
+		c.ChainVar = make([]byte, cvLen)
+	}
+
+	ephPubKey := ciphertext[:c.Cipher.DHLen()]
+	dh1 := c.Cipher.DH(c.ReceiverKey.Private, ephPubKey)
+	cv1 := c.deriveKey(dh1, c.ChainVar)
+	cc1 := c.Cipher.NewCipher(cv1)
+
+	header := ciphertext[:(2*c.Cipher.DHLen())+c.Cipher.MACLen()]
+	ciphertext = ciphertext[len(header):]
+	senderPubKey, err := cc1.Decrypt(ephPubKey, header[c.Cipher.DHLen():])
+	if err != nil {
+		return nil, err
+	}
+
+	dh2 := c.Cipher.DH(c.ReceiverKey.Private, senderPubKey)
+	c.ChainVar = c.deriveKey(dh2, cv1)
+	cc2 := c.Cipher.NewCipher(c.ChainVar)
+	body, err := cc2.Decrypt(header, ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	padLen := int(binary.BigEndian.Uint32(body[len(body)-4:]))
+
+	return body[:len(body)-(padLen+4)], nil
+}
+
+func (c *Crypter) deriveKey(dh, cv []byte) []byte {
+	name := c.Cipher.Name()
+	k := deriveKey(dh, cv, strconv.AppendInt(name[:], int64(c.KDFNum), 10), cvLen+c.Cipher.CCLen())
+	c.KDFNum++
+	return k
+}
+
+var Noise255 = noise255{}
+
+type noise255 struct{}
+
+func (noise255) Name() []byte { return []byte("Noise255") }
+func (noise255) DHLen() int   { return 32 }
+func (noise255) CCLen() int   { return 40 }
+func (noise255) MACLen() int  { return 16 }
+
+func (noise255) GenerateKey(random io.Reader) (Key, error) {
+	var pubKey, privKey [32]byte
+	if _, err := io.ReadFull(random, privKey[:]); err != nil {
+		return Key{}, err
+	}
+	privKey[0] &= 248
+	privKey[31] &= 127
+	privKey[31] |= 64
+	curve25519.ScalarBaseMult(&pubKey, &privKey)
+	return Key{Private: privKey[:], Public: pubKey[:]}, nil
+}
+
+func (noise255) DH(privkey, pubkey []byte) []byte {
 	var dst, in, base [32]byte
 	copy(in[:], privkey)
 	copy(base[:], pubkey)
@@ -101,15 +169,15 @@ func (Noise255) DH(privkey, pubkey []byte) []byte {
 	return dst[:]
 }
 
-func (Noise255) NewCipher(cv []byte) CipherContext {
-	return &noise255{cv}
+func (noise255) NewCipher(cv []byte) CipherContext {
+	return &noise255ctx{cv}
 }
 
-type noise255 struct {
+type noise255ctx struct {
 	cc []byte
 }
 
-func (n *noise255) Encrypt(dst, authtext, plaintext []byte) []byte {
+func (n *noise255ctx) key() (cipher.Stream, []byte) {
 	cipherKey := n.cc[:32]
 	iv := n.cc[32:40]
 
@@ -121,28 +189,53 @@ func (n *noise255) Encrypt(dst, authtext, plaintext []byte) []byte {
 	keystream := make([]byte, 128)
 	c.XORKeyStream(keystream, keystream)
 
-	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
-	c.XORKeyStream(ciphertext, plaintext)
-
-	var macKey [32]byte
-	var mac [16]byte
-	copy(macKey[:], keystream)
-	poly1305.Sum(&mac, n.authData(authtext, plaintext), &macKey)
-
 	n.cc = keystream[64:104]
-	return append(dst, append(ciphertext, mac[:]...)...)
+	return c, keystream
 }
 
-func (noise255) authData(authtext, plaintext []byte) []byte {
+func (n *noise255ctx) mac(keystream, authtext, ciphertext []byte, plaintextLen int) [16]byte {
+	var macKey [32]byte
+	var tag [16]byte
+	copy(macKey[:], keystream)
+	poly1305.Sum(&tag, n.authData(authtext, ciphertext, plaintextLen), &macKey)
+	return tag
+}
+
+func (n *noise255ctx) Encrypt(dst, authtext, plaintext []byte) []byte {
+	c, keystream := n.key()
+	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
+	c.XORKeyStream(ciphertext, plaintext)
+	tag := n.mac(keystream, authtext, ciphertext, len(plaintext))
+	return append(dst, append(ciphertext, tag[:]...)...)
+}
+
+var ErrAuthFailed = errors.New("box: message authentication failed")
+
+func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
+	digest := ciphertext[len(ciphertext)-16:]
+	ciphertext = ciphertext[:len(ciphertext)-16]
+	c, keystream := n.key()
+	tag := n.mac(keystream, authtext, ciphertext, len(ciphertext))
+
+	if subtle.ConstantTimeCompare(digest, tag[:]) != 1 {
+		return nil, ErrAuthFailed
+	}
+
+	plaintext := make([]byte, len(ciphertext))
+	c.XORKeyStream(plaintext, ciphertext)
+	return plaintext, nil
+}
+
+func (noise255ctx) authData(authtext, ciphertext []byte, plaintextLen int) []byte {
 	// PAD16(authtext) || PAD16(plaintext) || (uint64)len(authtext) || (uint64)len(plaintext)
-	authData := make([]byte, pad16len(len(authtext))+pad16len(len(plaintext))+8+8)
+	authData := make([]byte, pad16len(len(authtext))+pad16len(len(ciphertext))+8+8)
 	copy(authData, authtext)
 	offset := pad16len(len(authtext))
-	copy(authData[offset:], plaintext)
-	offset += pad16len(len(plaintext))
+	copy(authData[offset:], ciphertext)
+	offset += pad16len(len(ciphertext))
 	binary.BigEndian.PutUint64(authData[offset:], uint64(len(authtext)))
 	offset += 8
-	binary.BigEndian.PutUint64(authData[offset:], uint64(len(plaintext)))
+	binary.BigEndian.PutUint64(authData[offset:], uint64(plaintextLen))
 	return authData
 }
 
