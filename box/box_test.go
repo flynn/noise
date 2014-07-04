@@ -14,22 +14,7 @@ type S struct{}
 var _ = Suite(&S{})
 
 func (s *S) TestRoundtrip(c *C) {
-	recvKey, _ := Noise255.GenerateKey(rand.Reader)
-	sendKey, _ := Noise255.GenerateKey(rand.Reader)
-
-	enc := &Crypter{
-		Cipher:      Noise255,
-		SenderKey:   sendKey,
-		ReceiverKey: recvKey,
-	}
-	enc.ReceiverKey.Private = nil
-
-	dec := &Crypter{
-		Cipher:      Noise255,
-		SenderKey:   sendKey,
-		ReceiverKey: recvKey,
-	}
-	dec.SenderKey.Private = nil
+	enc, dec := newCrypters()
 
 	plain := []byte("yellow submarines")
 	padLen := 2
@@ -50,4 +35,34 @@ func (s *S) TestRoundtrip(c *C) {
 	plaintext, err = dec.Decrypt(ciphertext)
 	c.Assert(err, IsNil)
 	c.Assert(plaintext, DeepEquals, plain)
+}
+
+func newCrypters() (*Crypter, *Crypter) {
+	recvKey, _ := Noise255.GenerateKey(rand.Reader)
+	sendKey, _ := Noise255.GenerateKey(rand.Reader)
+
+	enc := &Crypter{
+		Cipher:      Noise255,
+		SenderKey:   sendKey,
+		ReceiverKey: recvKey,
+	}
+	enc.ReceiverKey.Private = nil
+
+	dec := &Crypter{
+		Cipher:      Noise255,
+		SenderKey:   sendKey,
+		ReceiverKey: recvKey,
+	}
+	dec.SenderKey.Private = nil
+
+	return enc, dec
+}
+
+func BenchmarkEncrypt(b *testing.B) {
+	enc, _ := newCrypters()
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		enc.Encrypt(nil, nil, []byte("yellow submarine"), 0)
+	}
 }
