@@ -90,6 +90,13 @@ func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int)
 		}
 		ephKey = &k
 	}
+	dstPrefixLen := len(dst)
+	// Allocate a new slice that can fit the full encrypted box if the current dst doesn't fit
+	if encLen := c.EncryptedLen(len(plaintext) + padLen); cap(dst)-len(dst) < encLen {
+		newDst := make([]byte, len(dst), len(dst)+encLen)
+		copy(newDst, dst)
+		dst = newDst
+	}
 
 	dh1 := c.Cipher.DH(ephKey.Private, c.ReceiverKey.Public)
 	dh2 := c.Cipher.DH(c.SenderKey.Private, c.ReceiverKey.Public)
@@ -100,8 +107,13 @@ func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int)
 	cc1 := c.Cipher.NewCipher(cv1)
 	cc2 := c.Cipher.NewCipher(c.ChainVar)
 
-	header := cc1.Encrypt(ephKey.Public, ephKey.Public, c.SenderKey.Public)
-	return noiseBody(cc2, header, padLen, plaintext, header), nil
+	dst = append(dst, ephKey.Public...)
+	dst = cc1.Encrypt(dst, ephKey.Public, c.SenderKey.Public)
+	return noiseBody(cc2, dst, padLen, plaintext, dst[dstPrefixLen:]), nil
+}
+
+func (c *Crypter) EncryptedLen(n int) int {
+	return n + (2 * c.Cipher.DHLen()) + (2 * c.Cipher.MACLen()) + 4
 }
 
 func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
