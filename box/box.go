@@ -227,7 +227,7 @@ func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
 }
 
 func (noise255ctx) authData(authtext, ciphertext []byte) []byte {
-	// PAD16(authtext) || PAD16(plaintext) || (uint64)len(authtext) || (uint64)len(plaintext)
+	// PAD16(authtext) || PAD16(ciphertext) || (uint64)len(authtext) || (uint64)len(ciphertext)
 	authData := make([]byte, pad16len(len(authtext))+pad16len(len(ciphertext))+8+8)
 	copy(authData, authtext)
 	offset := pad16len(len(authtext))
