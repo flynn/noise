@@ -17,7 +17,7 @@ import (
 )
 
 type Ciphersuite interface {
-	Name() []byte
+	AppendName(dst []byte) []byte
 	DHLen() int
 	CCLen() int
 	MACLen() int
@@ -30,28 +30,6 @@ type Ciphersuite interface {
 type CipherContext interface {
 	Encrypt(dst, authtext, plaintext []byte) []byte
 	Decrypt(authtext, ciphertext []byte) ([]byte, error)
-}
-
-func deriveKey(secret, extraData, info []byte, outputLen int) []byte {
-	output := make([]byte, 0, outputLen+sha512.Size)
-	t := make([]byte, 0, sha512.Size)
-	h := hmac.New(sha512.New, secret)
-
-	// info || (byte)c || t[0:32] || extra_data
-	data := make([]byte, len(info)+1+32+len(extraData))
-	copy(data, info)
-	copy(data[len(info)+1+32:], extraData)
-	var c byte
-	for len(output) < outputLen {
-		data[len(info)] = c
-		copy(data[len(info)+1:], t[:32])
-		h.Write(data)
-		t = h.Sum(t[:0])
-		h.Reset()
-		c++
-		output = append(output, t...)
-	}
-	return output[:outputLen]
 }
 
 const cvLen = 48
@@ -77,6 +55,8 @@ type Crypter struct {
 	ReceiverKey Key
 	ChainVar    []byte
 	KDFNum      int
+
+	keyBuf [512]byte
 }
 
 func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int) ([]byte, error) {
@@ -146,20 +126,45 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 }
 
 func (c *Crypter) deriveKey(dh, cv []byte) []byte {
-	name := c.Cipher.Name()
-	k := deriveKey(dh, cv, strconv.AppendInt(name[:], int64(c.KDFNum), 10), cvLen+c.Cipher.CCLen())
+	// info || (byte)c || t[0:32] || extra_data
+	data := append(append(c.keyBuf[:0:256], cv...), 0)
+	data = data[:len(data)+32]
+	data = c.Cipher.AppendName(data)
+	data = strconv.AppendInt(data, int64(c.KDFNum), 10)
+
+	output := c.keyBuf[256 : len(c.keyBuf)-sha512.Size : len(c.keyBuf)-sha512.Size]
+	t := c.keyBuf[len(c.keyBuf)-sha512.Size:]
+
+	k := deriveKey(dh, data, output, t, cvLen, cvLen+c.Cipher.CCLen())
 	c.KDFNum++
 	return k
+}
+
+func deriveKey(secret, data, output, t []byte, infoLen, outputLen int) []byte {
+	h := hmac.New(sha512.New, secret)
+	var c byte
+	for len(output) < outputLen {
+		data[infoLen] = c
+		copy(data[infoLen+1:], t[:32])
+		h.Write(data)
+		t = h.Sum(t[:0])
+		h.Reset()
+		c++
+		output = append(output, t...)
+	}
+	return output[:outputLen]
 }
 
 var Noise255 = noise255{}
 
 type noise255 struct{}
 
-func (noise255) Name() []byte { return []byte("Noise255") }
-func (noise255) DHLen() int   { return 32 }
-func (noise255) CCLen() int   { return 40 }
-func (noise255) MACLen() int  { return 16 }
+func (noise255) AppendName(dst []byte) []byte {
+	return append(dst, "Noise255\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"...)
+}
+func (noise255) DHLen() int  { return 32 }
+func (noise255) CCLen() int  { return 40 }
+func (noise255) MACLen() int { return 16 }
 
 func (noise255) GenerateKey(random io.Reader) (Key, error) {
 	var pubKey, privKey [32]byte
