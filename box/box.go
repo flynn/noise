@@ -193,11 +193,11 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 	return c, keystream
 }
 
-func (n *noise255ctx) mac(keystream, authtext, ciphertext []byte, plaintextLen int) [16]byte {
+func (n *noise255ctx) mac(keystream, authtext, ciphertext []byte) [16]byte {
 	var macKey [32]byte
 	var tag [16]byte
 	copy(macKey[:], keystream)
-	poly1305.Sum(&tag, n.authData(authtext, ciphertext, plaintextLen), &macKey)
+	poly1305.Sum(&tag, n.authData(authtext, ciphertext), &macKey)
 	return tag
 }
 
@@ -205,7 +205,7 @@ func (n *noise255ctx) Encrypt(dst, authtext, plaintext []byte) []byte {
 	c, keystream := n.key()
 	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
 	c.XORKeyStream(ciphertext, plaintext)
-	tag := n.mac(keystream, authtext, ciphertext, len(plaintext))
+	tag := n.mac(keystream, authtext, ciphertext)
 	return append(dst, append(ciphertext, tag[:]...)...)
 }
 
@@ -215,7 +215,7 @@ func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
 	digest := ciphertext[len(ciphertext)-16:]
 	ciphertext = ciphertext[:len(ciphertext)-16]
 	c, keystream := n.key()
-	tag := n.mac(keystream, authtext, ciphertext, len(ciphertext))
+	tag := n.mac(keystream, authtext, ciphertext)
 
 	if subtle.ConstantTimeCompare(digest, tag[:]) != 1 {
 		return nil, ErrAuthFailed
@@ -226,7 +226,7 @@ func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (noise255ctx) authData(authtext, ciphertext []byte, plaintextLen int) []byte {
+func (noise255ctx) authData(authtext, ciphertext []byte) []byte {
 	// PAD16(authtext) || PAD16(plaintext) || (uint64)len(authtext) || (uint64)len(plaintext)
 	authData := make([]byte, pad16len(len(authtext))+pad16len(len(ciphertext))+8+8)
 	copy(authData, authtext)
@@ -235,7 +235,7 @@ func (noise255ctx) authData(authtext, ciphertext []byte, plaintextLen int) []byt
 	offset += pad16len(len(ciphertext))
 	binary.BigEndian.PutUint64(authData[offset:], uint64(len(authtext)))
 	offset += 8
-	binary.BigEndian.PutUint64(authData[offset:], uint64(plaintextLen))
+	binary.BigEndian.PutUint64(authData[offset:], uint64(len(ciphertext)))
 	return authData
 }
 
