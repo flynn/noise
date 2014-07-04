@@ -42,4 +42,12 @@ func (s *S) TestRoundtrip(c *C) {
 	plaintext, err := dec.Decrypt(ciphertext)
 	c.Assert(err, IsNil)
 	c.Assert(plaintext, DeepEquals, plain)
+
+	plain[0] = 'Y'
+	ciphertext, err = enc.Encrypt(nil, nil, plain, 0)
+	c.Assert(err, IsNil)
+
+	plaintext, err = dec.Decrypt(ciphertext)
+	c.Assert(err, IsNil)
+	c.Assert(plaintext, DeepEquals, plain)
 }
