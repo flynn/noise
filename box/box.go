@@ -187,11 +187,12 @@ func (noise255) DH(privkey, pubkey []byte) []byte {
 }
 
 func (noise255) NewCipher(cv []byte) CipherContext {
-	return &noise255ctx{cv}
+	return &noise255ctx{cc: cv}
 }
 
 type noise255ctx struct {
-	cc []byte
+	cc        []byte
+	keystream [128]byte
 }
 
 func (n *noise255ctx) key() (cipher.Stream, []byte) {
@@ -203,11 +204,14 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 		panic(err)
 	}
 
-	keystream := make([]byte, 128)
-	c.XORKeyStream(keystream, keystream)
+	for i := range n.keystream {
+		n.keystream[i] = 0
+	}
 
-	n.cc = keystream[64:104]
-	return c, keystream
+	c.XORKeyStream(n.keystream[:], n.keystream[:])
+
+	n.cc = n.keystream[64:104]
+	return c, n.keystream[:]
 }
 
 func (n *noise255ctx) mac(keystream, authtext, ciphertext []byte) [16]byte {
