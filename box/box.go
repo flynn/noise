@@ -24,11 +24,11 @@ type Ciphersuite interface {
 	GenerateKey(io.Reader) (Key, error)
 
 	DH(privkey, pubkey []byte) []byte
-	NewCipher(cv []byte) CipherContext
+	NewCipher(cc []byte) CipherContext
 }
 
 type CipherContext interface {
-	Reset(cv []byte)
+	Reset(cc []byte)
 	Encrypt(dst, authtext, plaintext []byte) []byte
 	Decrypt(authtext, ciphertext []byte) ([]byte, error)
 }
@@ -83,23 +83,24 @@ func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int)
 	dh1 := c.Cipher.DH(ephKey.Private, c.ReceiverKey.Public)
 	dh2 := c.Cipher.DH(c.SenderKey.Private, c.ReceiverKey.Public)
 
-	cv1 := c.deriveKey(dh1, c.ChainVar)
-	c.ChainVar = c.deriveKey(dh2, cv1)
+	cv1, cc1 := c.deriveKey(dh1, c.ChainVar)
+	cv2, cc2 := c.deriveKey(dh2, cv1)
+	c.ChainVar = cv2
 
 	dst = append(dst, ephKey.Public...)
-	dst = c.cipher(cv1).Encrypt(dst, ephKey.Public, c.SenderKey.Public)
-	return noiseBody(c.cipher(c.ChainVar), dst, padLen, plaintext, dst[dstPrefixLen:]), nil
+	dst = c.cipher(cc1).Encrypt(dst, ephKey.Public, c.SenderKey.Public)
+	return noiseBody(c.cipher(cc2), dst, padLen, plaintext, dst[dstPrefixLen:]), nil
 }
 
 func (c *Crypter) EncryptedLen(n int) int {
 	return n + (2 * c.Cipher.DHLen()) + (2 * c.Cipher.MACLen()) + 4
 }
 
-func (c *Crypter) cipher(cv []byte) CipherContext {
+func (c *Crypter) cipher(cc []byte) CipherContext {
 	if c.cc == nil {
-		c.cc = c.Cipher.NewCipher(cv)
+		c.cc = c.Cipher.NewCipher(cc)
 	} else {
-		c.cc.Reset(cv)
+		c.cc.Reset(cc)
 	}
 	return c.cc
 }
@@ -111,18 +112,19 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 
 	ephPubKey := ciphertext[:c.Cipher.DHLen()]
 	dh1 := c.Cipher.DH(c.ReceiverKey.Private, ephPubKey)
-	cv1 := c.deriveKey(dh1, c.ChainVar)
+	cv1, cc1 := c.deriveKey(dh1, c.ChainVar)
 
 	header := ciphertext[:(2*c.Cipher.DHLen())+c.Cipher.MACLen()]
 	ciphertext = ciphertext[len(header):]
-	senderPubKey, err := c.cipher(cv1).Decrypt(ephPubKey, header[c.Cipher.DHLen():])
+	senderPubKey, err := c.cipher(cc1).Decrypt(ephPubKey, header[c.Cipher.DHLen():])
 	if err != nil {
 		return nil, err
 	}
 
 	dh2 := c.Cipher.DH(c.ReceiverKey.Private, senderPubKey)
-	c.ChainVar = c.deriveKey(dh2, cv1)
-	body, err := c.cipher(c.ChainVar).Decrypt(header, ciphertext)
+	cv2, cc2 := c.deriveKey(dh2, cv1)
+	c.ChainVar = cv2
+	body, err := c.cipher(cc2).Decrypt(header, ciphertext)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +133,7 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 	return body[:len(body)-(padLen+4)], nil
 }
 
-func (c *Crypter) deriveKey(dh, cv []byte) []byte {
+func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
 	// info || (byte)c || t[0:32] || extra_data
 	data := append(append(c.keyBuf[:0:256], cv...), 0)
 	data = data[:len(data)+32]
@@ -143,7 +145,7 @@ func (c *Crypter) deriveKey(dh, cv []byte) []byte {
 
 	k := deriveKey(dh, data, output, t, cvLen, cvLen+c.Cipher.CCLen())
 	c.KDFNum++
-	return k
+	return k[:cvLen], k[cvLen:]
 }
 
 func deriveKey(secret, data, output, t []byte, infoLen, outputLen int) []byte {
@@ -192,22 +194,22 @@ func (noise255) DH(privkey, pubkey []byte) []byte {
 	return dst[:]
 }
 
-func (noise255) NewCipher(cv []byte) CipherContext {
-	return &noise255ctx{cv: cv}
+func (noise255) NewCipher(cc []byte) CipherContext {
+	return &noise255ctx{cc: cc}
 }
 
 type noise255ctx struct {
-	cv        []byte
+	cc        []byte
 	keystream [128]byte
 }
 
-func (n *noise255ctx) Reset(cv []byte) {
-	n.cv = cv
+func (n *noise255ctx) Reset(cc []byte) {
+	n.cc = cc
 }
 
 func (n *noise255ctx) key() (cipher.Stream, []byte) {
-	cipherKey := n.cv[:32]
-	iv := n.cv[32:40]
+	cipherKey := n.cc[:32]
+	iv := n.cc[32:40]
 
 	c, err := chacha20.NewCipher(cipherKey, iv)
 	if err != nil {
@@ -220,7 +222,7 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 
 	c.XORKeyStream(n.keystream[:], n.keystream[:])
 
-	n.cv = n.keystream[64:104]
+	n.cc = n.keystream[64:104]
 	return c, n.keystream[:]
 }
 
