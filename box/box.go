@@ -157,7 +157,7 @@ func (c *Crypter) DecryptBody(authtext, ciphertext []byte) ([]byte, error) {
 
 func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
 	extra := append(c.Cipher.AppendName(c.scratch[:0]), c.KDFNum)
-	k := DeriveKey(dh, extra, cv, CVLen+c.Cipher.CCLen())
+	k := DeriveKey(dh, cv, extra, CVLen+c.Cipher.CCLen())
 	c.KDFNum++
 	return k[:CVLen], k[CVLen:]
 }
