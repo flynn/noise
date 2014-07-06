@@ -40,16 +40,6 @@ type Key struct {
 	Private []byte
 }
 
-func noiseBody(cc CipherContext, dst []byte, padLen int, appData, header []byte) []byte {
-	plaintext := make([]byte, len(appData)+padLen+4)
-	copy(plaintext, appData)
-	if _, err := io.ReadFull(rand.Reader, plaintext[len(appData):len(appData)+padLen]); err != nil {
-		panic(err)
-	}
-	binary.BigEndian.PutUint32(plaintext[len(appData)+padLen:], uint32(padLen))
-	return cc.Encrypt(dst, header, plaintext)
-}
-
 type Crypter struct {
 	Cipher      Ciphersuite
 	SenderKey   Key
@@ -57,8 +47,23 @@ type Crypter struct {
 	ChainVar    []byte
 	KDFNum      int
 
-	keyBuf [192]byte
-	cc     CipherContext
+	scratch [192]byte
+	cc      CipherContext
+}
+
+func (c *Crypter) noiseBody(cc CipherContext, dst []byte, padLen int, appData, header []byte) []byte {
+	var plaintext []byte
+	if plainLen := len(appData) + padLen + 4; len(c.scratch) >= plainLen {
+		plaintext = c.scratch[:plainLen]
+	} else {
+		plaintext = make([]byte, plainLen)
+	}
+	copy(plaintext, appData)
+	if _, err := io.ReadFull(rand.Reader, plaintext[len(appData):len(appData)+padLen]); err != nil {
+		panic(err)
+	}
+	binary.BigEndian.PutUint32(plaintext[len(appData)+padLen:], uint32(padLen))
+	return cc.Encrypt(dst, header, plaintext)
 }
 
 func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int) ([]byte, error) {
@@ -89,7 +94,7 @@ func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int)
 
 	dst = append(dst, ephKey.Public...)
 	dst = c.cipher(cc1).Encrypt(dst, ephKey.Public, c.SenderKey.Public)
-	return noiseBody(c.cipher(cc2), dst, padLen, plaintext, dst[dstPrefixLen:]), nil
+	return c.noiseBody(c.cipher(cc2), dst, padLen, plaintext, dst[dstPrefixLen:]), nil
 }
 
 func (c *Crypter) EncryptedLen(n int) int {
@@ -135,12 +140,12 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 
 func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
 	// info || (byte)c || t[0:32] || extra_data
-	data := append(append(c.keyBuf[:0:128], cv...), 0)
+	data := append(append(c.scratch[:0:128], cv...), 0)
 	data = data[:len(data)+32]
 	data = c.Cipher.AppendName(data)
 	data = strconv.AppendInt(data, int64(c.KDFNum), 10)
 
-	t := c.keyBuf[cap(data):]
+	t := c.scratch[cap(data):]
 
 	k := deriveKey(dh, data, t, cvLen, cvLen+c.Cipher.CCLen())
 	c.KDFNum++
