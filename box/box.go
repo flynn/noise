@@ -57,7 +57,7 @@ type Crypter struct {
 	ChainVar    []byte
 	KDFNum      int
 
-	keyBuf [512]byte
+	keyBuf [192]byte
 	cc     CipherContext
 }
 
@@ -135,20 +135,20 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 
 func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
 	// info || (byte)c || t[0:32] || extra_data
-	data := append(append(c.keyBuf[:0:256], cv...), 0)
+	data := append(append(c.keyBuf[:0:128], cv...), 0)
 	data = data[:len(data)+32]
 	data = c.Cipher.AppendName(data)
 	data = strconv.AppendInt(data, int64(c.KDFNum), 10)
 
-	output := c.keyBuf[256 : len(c.keyBuf)-sha512.Size : len(c.keyBuf)-sha512.Size]
-	t := c.keyBuf[len(c.keyBuf)-sha512.Size:]
+	t := c.keyBuf[cap(data):]
 
-	k := deriveKey(dh, data, output, t, cvLen, cvLen+c.Cipher.CCLen())
+	k := deriveKey(dh, data, t, cvLen, cvLen+c.Cipher.CCLen())
 	c.KDFNum++
 	return k[:cvLen], k[cvLen:]
 }
 
-func deriveKey(secret, data, output, t []byte, infoLen, outputLen int) []byte {
+func deriveKey(secret, data, t []byte, infoLen, outputLen int) []byte {
+	output := make([]byte, 0, outputLen)
 	h := hmac.New(sha512.New, secret)
 	var c byte
 	for len(output) < outputLen {
@@ -158,9 +158,13 @@ func deriveKey(secret, data, output, t []byte, infoLen, outputLen int) []byte {
 		t = h.Sum(t[:0])
 		h.Reset()
 		c++
-		output = append(output, t...)
+		if cap(output)-len(output) < len(t) {
+			output = append(output, t[:cap(output)-len(output)]...)
+		} else {
+			output = append(output, t...)
+		}
 	}
-	return output[:outputLen]
+	return output
 }
 
 var Noise255 = noise255{}
