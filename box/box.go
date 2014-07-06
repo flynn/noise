@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"strconv"
 
 	"code.google.com/p/go.crypto/curve25519"
 	"code.google.com/p/go.crypto/poly1305"
@@ -46,7 +45,7 @@ type Crypter struct {
 	Key      Key
 	PeerKey  Key
 	ChainVar []byte
-	KDFNum   int
+	KDFNum   uint8
 
 	scratch [64]byte
 	cc      CipherContext
@@ -157,7 +156,7 @@ func (c *Crypter) DecryptBody(authtext, ciphertext []byte) ([]byte, error) {
 }
 
 func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
-	extra := strconv.AppendInt(c.Cipher.AppendName(c.scratch[:0]), int64(c.KDFNum), 10)
+	extra := append(c.Cipher.AppendName(c.scratch[:0]), c.KDFNum)
 	k := DeriveKey(dh, extra, cv, CVLen+c.Cipher.CCLen())
 	c.KDFNum++
 	return k[:CVLen], k[CVLen:]
