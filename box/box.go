@@ -21,6 +21,7 @@ type Ciphersuite interface {
 	DHLen() int
 	CCLen() int
 	MACLen() int
+	KeyLen() (int, int)
 	GenerateKey(io.Reader) (Key, error)
 
 	DH(privkey, pubkey []byte) []byte
@@ -33,7 +34,7 @@ type CipherContext interface {
 	Decrypt(authtext, ciphertext []byte) ([]byte, error)
 }
 
-const cvLen = 48
+const CVLen = 48
 
 type Key struct {
 	Public  []byte
@@ -41,34 +42,34 @@ type Key struct {
 }
 
 type Crypter struct {
-	Cipher      Ciphersuite
-	SenderKey   Key
-	ReceiverKey Key
-	ChainVar    []byte
-	KDFNum      int
+	Cipher   Ciphersuite
+	Key      Key
+	PeerKey  Key
+	ChainVar []byte
+	KDFNum   int
 
-	scratch [192]byte
+	scratch [64]byte
 	cc      CipherContext
 }
 
-func (c *Crypter) noiseBody(cc CipherContext, dst []byte, padLen int, appData, header []byte) []byte {
-	var plaintext []byte
-	if plainLen := len(appData) + padLen + 4; len(c.scratch) >= plainLen {
-		plaintext = c.scratch[:plainLen]
+func (c *Crypter) EncryptBody(dst, plaintext, authtext []byte, padLen int) []byte {
+	var p []byte
+	if plainLen := len(plaintext) + padLen + 4; len(c.scratch) >= plainLen {
+		p = c.scratch[:plainLen]
 	} else {
-		plaintext = make([]byte, plainLen)
+		p = make([]byte, plainLen)
 	}
-	copy(plaintext, appData)
-	if _, err := io.ReadFull(rand.Reader, plaintext[len(appData):len(appData)+padLen]); err != nil {
+	copy(p, plaintext)
+	if _, err := io.ReadFull(rand.Reader, p[len(plaintext):len(plaintext)+padLen]); err != nil {
 		panic(err)
 	}
-	binary.BigEndian.PutUint32(plaintext[len(appData)+padLen:], uint32(padLen))
-	return cc.Encrypt(dst, header, plaintext)
+	binary.BigEndian.PutUint32(p[len(plaintext)+padLen:], uint32(padLen))
+	return c.cc.Encrypt(dst, authtext, p)
 }
 
-func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int) ([]byte, error) {
+func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen int) ([]byte, error) {
 	if len(c.ChainVar) == 0 {
-		c.ChainVar = make([]byte, cvLen)
+		c.ChainVar = make([]byte, CVLen)
 	}
 	if ephKey == nil {
 		k, err := c.Cipher.GenerateKey(rand.Reader)
@@ -85,20 +86,25 @@ func (c *Crypter) Encrypt(dst []byte, ephKey *Key, plaintext []byte, padLen int)
 		dst = newDst
 	}
 
-	dh1 := c.Cipher.DH(ephKey.Private, c.ReceiverKey.Public)
-	dh2 := c.Cipher.DH(c.SenderKey.Private, c.ReceiverKey.Public)
+	dh1 := c.Cipher.DH(ephKey.Private, c.PeerKey.Public)
+	dh2 := c.Cipher.DH(c.Key.Private, c.PeerKey.Public)
 
 	cv1, cc1 := c.deriveKey(dh1, c.ChainVar)
 	cv2, cc2 := c.deriveKey(dh2, cv1)
 	c.ChainVar = cv2
 
 	dst = append(dst, ephKey.Public...)
-	dst = c.cipher(cc1).Encrypt(dst, ephKey.Public, c.SenderKey.Public)
-	return c.noiseBody(c.cipher(cc2), dst, padLen, plaintext, dst[dstPrefixLen:]), nil
+	dst = c.cipher(cc1).Encrypt(dst, ephKey.Public, c.Key.Public)
+	c.cc.Reset(cc2)
+	return c.EncryptBody(dst, plaintext, dst[dstPrefixLen:], padLen), nil
 }
 
 func (c *Crypter) EncryptedLen(n int) int {
 	return n + (2 * c.Cipher.DHLen()) + (2 * c.Cipher.MACLen()) + 4
+}
+
+func (c *Crypter) SetContext(cc []byte) {
+	c.cipher(cc)
 }
 
 func (c *Crypter) cipher(cc []byte) CipherContext {
@@ -110,13 +116,13 @@ func (c *Crypter) cipher(cc []byte) CipherContext {
 	return c.cc
 }
 
-func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
+func (c *Crypter) DecryptBox(ciphertext []byte) ([]byte, error) {
 	if len(c.ChainVar) == 0 {
-		c.ChainVar = make([]byte, cvLen)
+		c.ChainVar = make([]byte, CVLen)
 	}
 
 	ephPubKey := ciphertext[:c.Cipher.DHLen()]
-	dh1 := c.Cipher.DH(c.ReceiverKey.Private, ephPubKey)
+	dh1 := c.Cipher.DH(c.Key.Private, ephPubKey)
 	cv1, cc1 := c.deriveKey(dh1, c.ChainVar)
 
 	header := ciphertext[:(2*c.Cipher.DHLen())+c.Cipher.MACLen()]
@@ -125,8 +131,13 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(c.PeerKey.Public) > 0 {
+		if len(c.PeerKey.Public) != len(senderPubKey) || subtle.ConstantTimeCompare(senderPubKey, c.PeerKey.Public) != 1 {
+			return nil, errors.New("pipe: unexpected sender public key")
+		}
+	}
 
-	dh2 := c.Cipher.DH(c.ReceiverKey.Private, senderPubKey)
+	dh2 := c.Cipher.DH(c.Key.Private, senderPubKey)
 	cv2, cc2 := c.deriveKey(dh2, cv1)
 	c.ChainVar = cv2
 	body, err := c.cipher(cc2).Decrypt(header, ciphertext)
@@ -138,33 +149,36 @@ func (c *Crypter) Decrypt(ciphertext []byte) ([]byte, error) {
 	return body[:len(body)-(padLen+4)], nil
 }
 
-func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
-	// info || (byte)c || t[0:32] || extra_data
-	data := append(append(c.scratch[:0:128], cv...), 0)
-	data = data[:len(data)+32]
-	data = c.Cipher.AppendName(data)
-	data = strconv.AppendInt(data, int64(c.KDFNum), 10)
-
-	t := c.scratch[cap(data):]
-
-	k := deriveKey(dh, data, t, cvLen, cvLen+c.Cipher.CCLen())
-	c.KDFNum++
-	return k[:cvLen], k[cvLen:]
+func (c *Crypter) DecryptBody(authtext, ciphertext []byte) ([]byte, error) {
+	if c.cc == nil {
+		return nil, errors.New("box: uninitialized cipher context")
+	}
+	return c.cc.Decrypt(authtext, ciphertext)
 }
 
-func deriveKey(secret, data, t []byte, infoLen, outputLen int) []byte {
-	output := make([]byte, 0, outputLen)
+func (c *Crypter) deriveKey(dh, cv []byte) ([]byte, []byte) {
+	extra := strconv.AppendInt(c.Cipher.AppendName(c.scratch[:0]), int64(c.KDFNum), 10)
+	k := DeriveKey(dh, extra, cv, CVLen+c.Cipher.CCLen())
+	c.KDFNum++
+	return k[:CVLen], k[CVLen:]
+}
+
+func DeriveKey(secret, extra, info []byte, outputLen int) []byte {
+	buf := make([]byte, outputLen+sha512.Size)
+	output := buf[:0:outputLen]
+	t := buf[outputLen:]
 	h := hmac.New(sha512.New, secret)
 	var c byte
 	for len(output) < outputLen {
-		data[infoLen] = c
-		copy(data[infoLen+1:], t[:32])
-		h.Write(data)
+		h.Write(info)
+		h.Write([]byte{c})
+		h.Write(t[:32])
+		h.Write(extra)
 		t = h.Sum(t[:0])
 		h.Reset()
 		c++
-		if cap(output)-len(output) < len(t) {
-			output = append(output, t[:cap(output)-len(output)]...)
+		if outputLen-len(output) < len(t) {
+			output = append(output, t[:outputLen-len(output)]...)
 		} else {
 			output = append(output, t...)
 		}
@@ -193,6 +207,10 @@ func (noise255) GenerateKey(random io.Reader) (Key, error) {
 	privKey[31] |= 64
 	curve25519.ScalarBaseMult(&pubKey, &privKey)
 	return Key{Private: privKey[:], Public: pubKey[:]}, nil
+}
+
+func (noise255) KeyLen() (int, int) {
+	return 32, 32
 }
 
 func (noise255) DH(privkey, pubkey []byte) []byte {

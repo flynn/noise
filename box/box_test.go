@@ -18,21 +18,21 @@ func (s *S) TestRoundtrip(c *C) {
 
 	plain := []byte("yellow submarines")
 	padLen := 2
-	ciphertext, err := enc.Encrypt(nil, nil, plain, padLen)
+	ciphertext, err := enc.EncryptBox(nil, nil, plain, padLen)
 	c.Assert(err, IsNil)
 
 	expectedLen := len(plain) + padLen + (2 * Noise255.DHLen()) + (2 * Noise255.MACLen()) + 4
 	c.Assert(ciphertext, HasLen, expectedLen, Commentf("expected: %d", expectedLen))
 
-	plaintext, err := dec.Decrypt(ciphertext)
+	plaintext, err := dec.DecryptBox(ciphertext)
 	c.Assert(err, IsNil)
 	c.Assert(plaintext, DeepEquals, plain)
 
 	plain[0] = 'Y'
-	ciphertext, err = enc.Encrypt(nil, nil, plain, 0)
+	ciphertext, err = enc.EncryptBox(nil, nil, plain, 0)
 	c.Assert(err, IsNil)
 
-	plaintext, err = dec.Decrypt(ciphertext)
+	plaintext, err = dec.DecryptBox(ciphertext)
 	c.Assert(err, IsNil)
 	c.Assert(plaintext, DeepEquals, plain)
 }
@@ -42,27 +42,27 @@ func newCrypters() (*Crypter, *Crypter) {
 	sendKey, _ := Noise255.GenerateKey(rand.Reader)
 
 	enc := &Crypter{
-		Cipher:      Noise255,
-		SenderKey:   sendKey,
-		ReceiverKey: recvKey,
+		Cipher:  Noise255,
+		Key:     sendKey,
+		PeerKey: recvKey,
 	}
-	enc.ReceiverKey.Private = nil
+	enc.PeerKey.Private = nil
 
 	dec := &Crypter{
-		Cipher:      Noise255,
-		SenderKey:   sendKey,
-		ReceiverKey: recvKey,
+		Cipher:  Noise255,
+		Key:     recvKey,
+		PeerKey: sendKey,
 	}
-	dec.SenderKey.Private = nil
+	dec.PeerKey.Private = nil
 
 	return enc, dec
 }
 
-func BenchmarkEncrypt(b *testing.B) {
+func BenchmarkEncryptBox(b *testing.B) {
 	enc, _ := newCrypters()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		enc.Encrypt(nil, nil, []byte("yellow submarine"), 0)
+		enc.EncryptBox(nil, nil, []byte("yellow submarine"), 0)
 	}
 }
