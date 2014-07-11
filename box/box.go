@@ -78,7 +78,7 @@ func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen i
 	}
 	dstPrefixLen := len(dst)
 	// Allocate a new slice that can fit the full encrypted box if the current dst doesn't fit
-	if encLen := c.EncryptedLen(len(plaintext) + padLen); cap(dst)-len(dst) < encLen {
+	if encLen := c.BoxLen(len(plaintext) + padLen); cap(dst)-len(dst) < encLen {
 		newDst := make([]byte, len(dst), len(dst)+encLen)
 		copy(newDst, dst)
 		dst = newDst
@@ -97,8 +97,12 @@ func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen i
 	return c.EncryptBody(dst, plaintext, dst[dstPrefixLen:], padLen), nil
 }
 
-func (c *Crypter) EncryptedLen(n int) int {
+func (c *Crypter) BoxLen(n int) int {
 	return n + (2 * c.Cipher.DHLen()) + (2 * c.Cipher.MACLen()) + 4
+}
+
+func (c *Crypter) BodyLen(n int) int {
+	return n + c.Cipher.MACLen() + 4
 }
 
 func (c *Crypter) SetContext(cc []byte) {
