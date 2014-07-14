@@ -228,7 +228,7 @@ func (noise255) NewCipher(cc []byte) CipherContext {
 
 type noise255ctx struct {
 	cc        []byte
-	keystream [104]byte
+	keystream [168]byte
 }
 
 func (n *noise255ctx) Reset(cc []byte) {
@@ -264,11 +264,12 @@ func (n *noise255ctx) rekey() {
 		panic(err)
 	}
 
-	n.cc = n.keystream[64:]
-	for i := range n.cc {
-		n.cc[i] = 0
+	ks := n.keystream[64:]
+	for i := range ks {
+		ks[i] = 0
 	}
-	c.XORKeyStream(n.cc, n.cc)
+	c.XORKeyStream(ks, ks)
+	n.cc = ks[64:]
 }
 
 func (n *noise255ctx) mac(keystream, ciphertext, authtext []byte) [16]byte {
