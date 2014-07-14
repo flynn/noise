@@ -92,9 +92,9 @@ func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen i
 	c.ChainVar = cv2
 
 	dst = append(dst, ephKey.Public...)
-	dst = c.cipher(cc1).Encrypt(dst, c.Key.Public, ephKey.Public)
+	dst = c.cipher(cc1).Encrypt(dst, c.Key.Public, append(c.PeerKey.Public, ephKey.Public...))
 	c.cc.Reset(cc2)
-	return c.EncryptBody(dst, plaintext, dst[dstPrefixLen:], padLen), nil
+	return c.EncryptBody(dst, plaintext, append(c.PeerKey.Public, dst[dstPrefixLen:]...), padLen), nil
 }
 
 func (c *Crypter) BoxLen(n int) int {
@@ -129,7 +129,7 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 
 	header := ciphertext[:(2*c.Cipher.DHLen())+c.Cipher.MACLen()]
 	ciphertext = ciphertext[len(header):]
-	senderPubKey, err := c.cipher(cc1).Decrypt(header[c.Cipher.DHLen():], ephPubKey)
+	senderPubKey, err := c.cipher(cc1).Decrypt(header[c.Cipher.DHLen():], append(c.Key.Public, ephPubKey...))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 	dh2 := c.Cipher.DH(c.Key.Private, senderPubKey)
 	cv2, cc2 := c.deriveKey(dh2, cv1, kdfNum+1)
 	c.ChainVar = cv2
-	body, err := c.cipher(cc2).Decrypt(ciphertext, header)
+	body, err := c.cipher(cc2).Decrypt(ciphertext, append(c.Key.Public, header...))
 	if err != nil {
 		return nil, err
 	}
