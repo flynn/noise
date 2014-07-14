@@ -228,7 +228,7 @@ func (noise255) NewCipher(cc []byte) CipherContext {
 
 type noise255ctx struct {
 	cc        []byte
-	keystream [128]byte
+	keystream [104]byte
 }
 
 func (n *noise255ctx) Reset(cc []byte) {
@@ -244,14 +244,31 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 		panic(err)
 	}
 
-	for i := range n.keystream {
+	keystream := n.keystream[:64]
+	for i := range keystream {
 		n.keystream[i] = 0
 	}
+	c.XORKeyStream(keystream, keystream)
 
-	c.XORKeyStream(n.keystream[:], n.keystream[:])
+	return c, keystream
+}
 
-	n.cc = n.keystream[64:104]
-	return c, n.keystream[:]
+func (n *noise255ctx) rekey() {
+	cipherKey := n.cc[:32]
+	iv := n.cc[32:40]
+	for i := range iv {
+		iv[i] ^= 0xff
+	}
+	c, err := chacha20.NewCipher(cipherKey, iv)
+	if err != nil {
+		panic(err)
+	}
+
+	n.cc = n.keystream[64:]
+	for i := range n.cc {
+		n.cc[i] = 0
+	}
+	c.XORKeyStream(n.cc, n.cc)
 }
 
 func (n *noise255ctx) mac(keystream, ciphertext, authtext []byte) [16]byte {
@@ -266,6 +283,7 @@ func (n *noise255ctx) Encrypt(dst, plaintext, authtext []byte) []byte {
 	c, keystream := n.key()
 	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
 	c.XORKeyStream(ciphertext, plaintext)
+	n.rekey()
 	tag := n.mac(keystream, ciphertext, authtext)
 	return append(dst, append(ciphertext, tag[:]...)...)
 }
@@ -284,22 +302,23 @@ func (n *noise255ctx) Decrypt(ciphertext, authtext []byte) ([]byte, error) {
 
 	plaintext := make([]byte, len(ciphertext))
 	c.XORKeyStream(plaintext, ciphertext)
+	n.rekey()
 	return plaintext, nil
 }
 
 func (noise255ctx) authData(ciphertext, authtext []byte) []byte {
-	// PAD16(authtext) || PAD16(ciphertext) || (uint64)len(authtext) || (uint64)len(ciphertext)
+	// PAD16(authtext) || PAD16(ciphertext) || (uint64_little_endian)len(authtext) || (uint64_little_endian)len(ciphertext)
 	authData := make([]byte, pad16len(len(authtext))+pad16len(len(ciphertext))+8+8)
 	copy(authData, authtext)
 	offset := pad16len(len(authtext))
 	copy(authData[offset:], ciphertext)
 	offset += pad16len(len(ciphertext))
-	binary.BigEndian.PutUint64(authData[offset:], uint64(len(authtext)))
+	binary.LittleEndian.PutUint64(authData[offset:], uint64(len(authtext)))
 	offset += 8
-	binary.BigEndian.PutUint64(authData[offset:], uint64(len(ciphertext)))
+	binary.LittleEndian.PutUint64(authData[offset:], uint64(len(ciphertext)))
 	return authData
 }
 
 func pad16len(l int) int {
-	return l + (16 - (l % 16))
+	return l + ((16 - (l % 16)) % 16)
 }
