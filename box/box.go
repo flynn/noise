@@ -29,8 +29,8 @@ type Ciphersuite interface {
 
 type CipherContext interface {
 	Reset(cc []byte)
-	Encrypt(dst, authtext, plaintext []byte) []byte
-	Decrypt(authtext, ciphertext []byte) ([]byte, error)
+	Encrypt(dst, plaintext, authtext []byte) []byte
+	Decrypt(ciphertext, authtext []byte) ([]byte, error)
 }
 
 const CVLen = 48
@@ -62,7 +62,7 @@ func (c *Crypter) EncryptBody(dst, plaintext, authtext []byte, padLen int) []byt
 		panic(err)
 	}
 	binary.BigEndian.PutUint32(p[len(plaintext)+padLen:], uint32(padLen))
-	return c.cc.Encrypt(dst, authtext, p)
+	return c.cc.Encrypt(dst, p, authtext)
 }
 
 func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen int, kdfNum uint8) ([]byte, error) {
@@ -92,7 +92,7 @@ func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen i
 	c.ChainVar = cv2
 
 	dst = append(dst, ephKey.Public...)
-	dst = c.cipher(cc1).Encrypt(dst, ephKey.Public, c.Key.Public)
+	dst = c.cipher(cc1).Encrypt(dst, c.Key.Public, ephKey.Public)
 	c.cc.Reset(cc2)
 	return c.EncryptBody(dst, plaintext, dst[dstPrefixLen:], padLen), nil
 }
@@ -129,7 +129,7 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 
 	header := ciphertext[:(2*c.Cipher.DHLen())+c.Cipher.MACLen()]
 	ciphertext = ciphertext[len(header):]
-	senderPubKey, err := c.cipher(cc1).Decrypt(ephPubKey, header[c.Cipher.DHLen():])
+	senderPubKey, err := c.cipher(cc1).Decrypt(header[c.Cipher.DHLen():], ephPubKey)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 	dh2 := c.Cipher.DH(c.Key.Private, senderPubKey)
 	cv2, cc2 := c.deriveKey(dh2, cv1, kdfNum+1)
 	c.ChainVar = cv2
-	body, err := c.cipher(cc2).Decrypt(header, ciphertext)
+	body, err := c.cipher(cc2).Decrypt(ciphertext, header)
 	if err != nil {
 		return nil, err
 	}
@@ -151,11 +151,11 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 	return body[:len(body)-(padLen+4)], nil
 }
 
-func (c *Crypter) DecryptBody(authtext, ciphertext []byte) ([]byte, error) {
+func (c *Crypter) DecryptBody(ciphertext, authtext []byte) ([]byte, error) {
 	if c.cc == nil {
 		return nil, errors.New("box: uninitialized cipher context")
 	}
-	return c.cc.Decrypt(authtext, ciphertext)
+	return c.cc.Decrypt(ciphertext, authtext)
 }
 
 func (c *Crypter) deriveKey(dh, cv []byte, kdfNum uint8) ([]byte, []byte) {
@@ -254,29 +254,29 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 	return c, n.keystream[:]
 }
 
-func (n *noise255ctx) mac(keystream, authtext, ciphertext []byte) [16]byte {
+func (n *noise255ctx) mac(keystream, ciphertext, authtext []byte) [16]byte {
 	var macKey [32]byte
 	var tag [16]byte
 	copy(macKey[:], keystream)
-	poly1305.Sum(&tag, n.authData(authtext, ciphertext), &macKey)
+	poly1305.Sum(&tag, n.authData(ciphertext, authtext), &macKey)
 	return tag
 }
 
-func (n *noise255ctx) Encrypt(dst, authtext, plaintext []byte) []byte {
+func (n *noise255ctx) Encrypt(dst, plaintext, authtext []byte) []byte {
 	c, keystream := n.key()
 	ciphertext := make([]byte, len(plaintext), len(plaintext)+16)
 	c.XORKeyStream(ciphertext, plaintext)
-	tag := n.mac(keystream, authtext, ciphertext)
+	tag := n.mac(keystream, ciphertext, authtext)
 	return append(dst, append(ciphertext, tag[:]...)...)
 }
 
 var ErrAuthFailed = errors.New("box: message authentication failed")
 
-func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
+func (n *noise255ctx) Decrypt(ciphertext, authtext []byte) ([]byte, error) {
 	digest := ciphertext[len(ciphertext)-16:]
 	ciphertext = ciphertext[:len(ciphertext)-16]
 	c, keystream := n.key()
-	tag := n.mac(keystream, authtext, ciphertext)
+	tag := n.mac(keystream, ciphertext, authtext)
 
 	if subtle.ConstantTimeCompare(digest, tag[:]) != 1 {
 		return nil, ErrAuthFailed
@@ -287,7 +287,7 @@ func (n *noise255ctx) Decrypt(authtext, ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (noise255ctx) authData(authtext, ciphertext []byte) []byte {
+func (noise255ctx) authData(ciphertext, authtext []byte) []byte {
 	// PAD16(authtext) || PAD16(ciphertext) || (uint64)len(authtext) || (uint64)len(ciphertext)
 	authData := make([]byte, pad16len(len(authtext))+pad16len(len(ciphertext))+8+8)
 	copy(authData, authtext)
