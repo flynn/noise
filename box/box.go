@@ -12,7 +12,7 @@ import (
 
 	"code.google.com/p/go.crypto/curve25519"
 	"code.google.com/p/go.crypto/poly1305"
-	"github.com/codahale/chacha20"
+	"github.com/titanous/chacha20"
 )
 
 type Ciphersuite interface {
@@ -229,6 +229,7 @@ func (noise255) NewCipher(cc []byte) CipherContext {
 type noise255ctx struct {
 	cc        []byte
 	keystream [168]byte
+	cipher    chacha20.Cipher
 }
 
 func (n *noise255ctx) Reset(cc []byte) {
@@ -239,8 +240,7 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 	cipherKey := n.cc[:32]
 	iv := n.cc[32:40]
 
-	c, err := chacha20.NewCipher(cipherKey, iv)
-	if err != nil {
+	if err := n.cipher.Initialize(cipherKey, iv); err != nil {
 		panic(err)
 	}
 
@@ -248,9 +248,9 @@ func (n *noise255ctx) key() (cipher.Stream, []byte) {
 	for i := range keystream {
 		n.keystream[i] = 0
 	}
-	c.XORKeyStream(keystream, keystream)
+	n.cipher.XORKeyStream(keystream, keystream)
 
-	return c, keystream
+	return &n.cipher, keystream
 }
 
 func (n *noise255ctx) rekey() {
@@ -259,8 +259,7 @@ func (n *noise255ctx) rekey() {
 	for i := range iv {
 		iv[i] ^= 0xff
 	}
-	c, err := chacha20.NewCipher(cipherKey, iv)
-	if err != nil {
+	if err := n.cipher.Initialize(cipherKey, iv); err != nil {
 		panic(err)
 	}
 
@@ -268,7 +267,7 @@ func (n *noise255ctx) rekey() {
 	for i := range ks {
 		ks[i] = 0
 	}
-	c.XORKeyStream(ks, ks)
+	n.cipher.XORKeyStream(ks, ks)
 	n.cc = ks[64:]
 }
 
