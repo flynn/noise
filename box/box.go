@@ -70,7 +70,7 @@ func (c *Crypter) EncryptBox(dst []byte, ephKey *Key, plaintext []byte, padLen i
 		c.ChainVar = make([]byte, CVLen)
 	}
 	if ephKey == nil {
-		k, err := c.Cipher.GenerateKey(rand.Reader)
+		k, err := c.Cipher.GenerateKey(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -200,6 +200,9 @@ func (noise255) MACLen() int { return 16 }
 
 func (noise255) GenerateKey(random io.Reader) (Key, error) {
 	var pubKey, privKey [32]byte
+	if random == nil {
+		random = rand.Reader
+	}
 	if _, err := io.ReadFull(random, privKey[:]); err != nil {
 		return Key{}, err
 	}

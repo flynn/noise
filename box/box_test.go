@@ -1,7 +1,6 @@
 package box
 
 import (
-	"crypto/rand"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -38,8 +37,8 @@ func (s *S) TestRoundtrip(c *C) {
 }
 
 func newCrypters() (*Crypter, *Crypter) {
-	recvKey, _ := Noise255.GenerateKey(rand.Reader)
-	sendKey, _ := Noise255.GenerateKey(rand.Reader)
+	recvKey, _ := Noise255.GenerateKey(nil)
+	sendKey, _ := Noise255.GenerateKey(nil)
 
 	enc := &Crypter{
 		Cipher:  Noise255,
