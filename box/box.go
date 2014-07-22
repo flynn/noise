@@ -291,6 +291,9 @@ func (n *noise255ctx) Encrypt(dst, plaintext, authtext []byte) []byte {
 var ErrAuthFailed = errors.New("box: message authentication failed")
 
 func (n *noise255ctx) Decrypt(ciphertext, authtext []byte) ([]byte, error) {
+	if len(ciphertext) < 16 {
+		return nil, ErrAuthFailed
+	}
 	digest := ciphertext[len(ciphertext)-16:]
 	ciphertext = ciphertext[:len(ciphertext)-16]
 	c, keystream := n.key()
