@@ -10,8 +10,8 @@ import (
 	"errors"
 	"io"
 
-	"code.google.com/p/go.crypto/curve25519"
-	"code.google.com/p/go.crypto/poly1305"
+	"golang.org/x/crypto/curve25519"
+	"golang.org/x/crypto/poly1305"
 	"github.com/titanous/chacha20"
 )
 
