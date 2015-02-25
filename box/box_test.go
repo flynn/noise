@@ -1,6 +1,8 @@
 package box
 
 import (
+	"encoding/hex"
+	"errors"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -55,6 +57,20 @@ func newCrypters() (*Crypter, *Crypter) {
 	dec.PeerKey.Private = nil
 
 	return enc, dec
+}
+
+func (s *S) TestInvalidPadLen(c *C) {
+	pubKey, _ := hex.DecodeString("3e111ccd6d51cf24cc8e24812d9c032a98119bad49611024cdddbe1f5e8eb511")
+	privKey, _ := hex.DecodeString("d023aabb62c4fed87d44f3b808fa4dadc3acc9fb5e23edfcffb68bce8a783e46")
+	dec := &Crypter{
+		Cipher: Noise255,
+		Key:    Key{Public: pubKey, Private: privKey},
+	}
+	encrypted, _ := hex.DecodeString("56cc175a5b73d218e486b0d6e2cf56b6bc44a595a50f220090fa83011c2df25e782c46bd8c96a1df37c44ce8a4d8bb9b207889b8db777a24692682a891859ea043bd397ee1f0e785d34ed66024af039b77118478399977c849da57c0bb2000642f2ad2e9dd9425e060364d754f350b6252b6f8a8aa1135afc8db22")
+
+	decrypted, err := dec.DecryptBox(encrypted, 0)
+	c.Assert(decrypted, IsNil)
+	c.Assert(err, DeepEquals, errors.New("box: invalid padding length"))
 }
 
 func BenchmarkEncryptBox(b *testing.B) {

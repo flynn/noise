@@ -135,7 +135,7 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 	}
 	if len(c.PeerKey.Public) > 0 {
 		if len(c.PeerKey.Public) != len(senderPubKey) || subtle.ConstantTimeCompare(senderPubKey, c.PeerKey.Public) != 1 {
-			return nil, errors.New("pipe: unexpected sender public key")
+			return nil, errors.New("box: unexpected sender public key")
 		}
 	}
 
@@ -147,7 +147,9 @@ func (c *Crypter) DecryptBox(ciphertext []byte, kdfNum uint8) ([]byte, error) {
 		return nil, err
 	}
 	padLen := int(binary.BigEndian.Uint32(body[len(body)-4:]))
-
+	if padLen < 0 || len(body) < padLen+4 {
+		return nil, errors.New("box: invalid padding length")
+	}
 	return body[:len(body)-(padLen+4)], nil
 }
 
