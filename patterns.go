@@ -84,7 +84,7 @@ var HandshakeXN = HandshakePattern{
 var HandshakeIN = HandshakePattern{
 	Name: "IN",
 	Messages: [][]MessagePattern{
-		{MessagePatternS, MessagePatternE},
+		{MessagePatternE, MessagePatternS},
 		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
 	},
 }
@@ -139,7 +139,7 @@ var HandshakeXX = HandshakePattern{
 var HandshakeIX = HandshakePattern{
 	Name: "IX",
 	Messages: [][]MessagePattern{
-		{MessagePatternS, MessagePatternE},
+		{MessagePatternE, MessagePatternS},
 		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES, MessagePatternS, MessagePatternDHSE},
 	},
 }

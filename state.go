@@ -119,16 +119,18 @@ type HandshakeState struct {
 	e               DHKey  // local ephemeral keypair
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
+	psk             bool
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	msgIdx          int
 	rng             io.Reader
 }
 
-func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern HandshakePattern, initiator bool, prologue []byte, newS, newE *DHKey, newRS, newRE []byte) *HandshakeState {
+func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern HandshakePattern, initiator bool, prologue, presharedKey []byte, newS, newE *DHKey, newRS, newRE []byte) *HandshakeState {
 	hs := &HandshakeState{
 		rs:              newRS,
 		re:              newRE,
+		psk:             len(presharedKey) > 0,
 		messagePatterns: newHandshakePattern.Messages,
 		shouldWrite:     initiator,
 		rng:             rng,
@@ -140,8 +142,15 @@ func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern Handsh
 	if newS != nil {
 		hs.s = *newS
 	}
-	hs.InitializeSymmetric([]byte("Noise_" + newHandshakePattern.Name + "_" + string(cs.Name())))
+	namePrefix := "Noise_"
+	if hs.psk {
+		namePrefix = "NoisePSK_"
+	}
+	hs.InitializeSymmetric([]byte(namePrefix + newHandshakePattern.Name + "_" + string(cs.Name())))
 	hs.MixHash(prologue)
+	if hs.psk {
+		hs.MixHash(presharedKey)
+	}
 	for _, m := range newHandshakePattern.InitiatorPreMessages {
 		switch {
 		case initiator && m == MessagePatternS:
@@ -184,7 +193,11 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 		switch msg {
 		case MessagePatternE:
 			s.e = s.cs.GenerateKeypair(s.rng)
-			out = s.EncryptAndHash(out, s.e.Public)
+			out = append(out, s.e.Public...)
+			s.MixHash(s.e.Public)
+			if s.psk {
+				s.MixKey(s.e.Public)
+			}
 		case MessagePatternS:
 			if len(s.s.Public) == 0 {
 				panic("noise: invalid state, s.Public is nil")
@@ -227,7 +240,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 		switch msg {
 		case MessagePatternE, MessagePatternS:
 			expected := s.cs.DHLen()
-			if s.hasKey {
+			if msg == MessagePatternS && s.hasKey {
 				expected += 16
 			}
 			if len(message) < expected {
@@ -235,7 +248,15 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			}
 			switch msg {
 			case MessagePatternE:
-				s.re, err = s.DecryptAndHash(s.re[:0], message[:expected])
+				if cap(s.re) < s.cs.DHLen() {
+					s.re = make([]byte, s.cs.DHLen())
+				}
+				s.re = s.re[:s.cs.DHLen()]
+				copy(s.re, message)
+				s.MixHash(s.re)
+				if s.psk {
+					s.MixKey(s.re)
+				}
 			case MessagePatternS:
 				if len(s.rs) > 0 {
 					panic("noise: invalid state, rs is not nil")
