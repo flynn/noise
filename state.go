@@ -186,6 +186,9 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.e = s.cs.GenerateKeypair(s.rng)
 			out = s.EncryptAndHash(out, s.e.Public)
 		case MessagePatternS:
+			if len(s.s.Public) == 0 {
+				panic("noise: invalid state, s.Public is nil")
+			}
 			out = s.EncryptAndHash(out, s.s.Public)
 		case MessagePatternDHEE:
 			s.MixKey(s.cs.DH(s.e.Private, s.re))
@@ -234,6 +237,9 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			case MessagePatternE:
 				s.re, err = s.DecryptAndHash(s.re[:0], message[:expected])
 			case MessagePatternS:
+				if len(s.rs) > 0 {
+					panic("noise: invalid state, rs is not nil")
+				}
 				s.rs, err = s.DecryptAndHash(s.rs[:0], message[:expected])
 			}
 			if err != nil {
