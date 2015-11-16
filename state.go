@@ -133,52 +133,61 @@ type HandshakeState struct {
 	rng             io.Reader
 }
 
-func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern HandshakePattern, initiator bool, prologue, presharedKey []byte, newS, newE *DHKey, newRS, newRE []byte) *HandshakeState {
+type Config struct {
+	CipherSuite      CipherSuite
+	Random           io.Reader
+	Pattern          HandshakePattern
+	Initiator        bool
+	Prologue         []byte
+	PresharedKey     []byte
+	StaticKeypair    DHKey
+	EphemeralKeypair DHKey
+	PeerStatic       []byte
+	PeerEphemeral    []byte
+}
+
+func NewHandshakeState(c Config) *HandshakeState {
 	hs := &HandshakeState{
-		rs:              newRS,
-		re:              newRE,
-		messagePatterns: newHandshakePattern.Messages,
-		shouldWrite:     initiator,
-		rng:             rng,
+		s:               c.StaticKeypair,
+		e:               c.EphemeralKeypair,
+		rs:              c.PeerStatic,
+		re:              c.PeerEphemeral,
+		messagePatterns: c.Pattern.Messages,
+		shouldWrite:     c.Initiator,
+		rng:             c.Random,
 	}
-	hs.SymmetricState.cs = cs
-	if newE != nil {
-		hs.e = *newE
-	}
-	if newS != nil {
-		hs.s = *newS
-	}
+	hs.SymmetricState.cs = c.CipherSuite
 	namePrefix := "Noise_"
-	if hs.hasPSK {
+	if len(c.PresharedKey) > 0 {
 		namePrefix = "NoisePSK_"
 	}
-	hs.InitializeSymmetric([]byte(namePrefix + newHandshakePattern.Name + "_" + string(cs.Name())))
-	hs.MixHash(prologue)
-	if len(presharedKey) > 0 {
-		hs.MixPresharedKey(presharedKey)
+	hs.InitializeSymmetric([]byte(namePrefix + c.Pattern.Name + "_" + string(hs.cs.Name())))
+	hs.MixHash(c.Prologue)
+	if len(c.PresharedKey) > 0 {
+		hs.MixPresharedKey(c.PresharedKey)
 	}
-	for _, m := range newHandshakePattern.InitiatorPreMessages {
+	for _, m := range c.Pattern.InitiatorPreMessages {
 		switch {
-		case initiator && m == MessagePatternS:
-			hs.MixHash(newS.Public)
-		case initiator && m == MessagePatternE:
-			hs.MixHash(newE.Public)
-		case !initiator && m == MessagePatternS:
-			hs.MixHash(newRS)
-		case !initiator && m == MessagePatternE:
-			hs.MixHash(newRE)
+		case c.Initiator && m == MessagePatternS:
+			hs.MixHash(hs.s.Public)
+		case c.Initiator && m == MessagePatternE:
+			hs.MixHash(hs.e.Public)
+		case !c.Initiator && m == MessagePatternS:
+			hs.MixHash(hs.rs)
+		case !c.Initiator && m == MessagePatternE:
+			hs.MixHash(hs.re)
 		}
 	}
-	for _, m := range newHandshakePattern.ResponderPreMessages {
+	for _, m := range c.Pattern.ResponderPreMessages {
 		switch {
-		case !initiator && m == MessagePatternS:
-			hs.MixHash(newS.Public)
-		case !initiator && m == MessagePatternE:
-			hs.MixHash(newE.Public)
-		case initiator && m == MessagePatternS:
-			hs.MixHash(newRS)
-		case initiator && m == MessagePatternE:
-			hs.MixHash(newRE)
+		case !c.Initiator && m == MessagePatternS:
+			hs.MixHash(hs.s.Public)
+		case !c.Initiator && m == MessagePatternE:
+			hs.MixHash(hs.e.Public)
+		case c.Initiator && m == MessagePatternS:
+			hs.MixHash(hs.rs)
+		case c.Initiator && m == MessagePatternE:
+			hs.MixHash(hs.re)
 		}
 	}
 	return hs
