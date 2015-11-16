@@ -26,7 +26,8 @@ func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 
 type SymmetricState struct {
 	CipherState
-	hasKey bool
+	hasK   bool
+	hasPSK bool
 	ck     []byte
 	h      []byte
 }
@@ -46,7 +47,7 @@ func (s *SymmetricState) InitializeSymmetric(handshakeName []byte) {
 
 func (s *SymmetricState) MixKey(dhOutput []byte) {
 	s.n = 0
-	s.hasKey = true
+	s.hasK = true
 	var hk []byte
 	s.ck, hk = HKDF(s.cs.Hash, s.ck[:0], s.k[:0], s.ck, dhOutput)
 	copy(s.k[:], hk)
@@ -60,8 +61,15 @@ func (s *SymmetricState) MixHash(data []byte) {
 	s.h = h.Sum(s.h[:0])
 }
 
+func (s *SymmetricState) MixPresharedKey(presharedKey []byte) {
+	var temp []byte
+	s.ck, temp = HKDF(s.cs.Hash, s.ck[:0], nil, s.ck, presharedKey)
+	s.MixHash(temp)
+	s.hasPSK = true
+}
+
 func (s *SymmetricState) EncryptAndHash(out, plaintext []byte) []byte {
-	if !s.hasKey {
+	if !s.hasK {
 		s.MixHash(plaintext)
 		return append(out, plaintext...)
 	}
@@ -71,7 +79,7 @@ func (s *SymmetricState) EncryptAndHash(out, plaintext []byte) []byte {
 }
 
 func (s *SymmetricState) DecryptAndHash(out, data []byte) ([]byte, error) {
-	if !s.hasKey {
+	if !s.hasK {
 		s.MixHash(data)
 		return append(out, data...), nil
 	}
@@ -119,7 +127,6 @@ type HandshakeState struct {
 	e               DHKey  // local ephemeral keypair
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
-	psk             bool
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	msgIdx          int
@@ -130,7 +137,6 @@ func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern Handsh
 	hs := &HandshakeState{
 		rs:              newRS,
 		re:              newRE,
-		psk:             len(presharedKey) > 0,
 		messagePatterns: newHandshakePattern.Messages,
 		shouldWrite:     initiator,
 		rng:             rng,
@@ -143,13 +149,13 @@ func NewHandshakeState(cs CipherSuite, rng io.Reader, newHandshakePattern Handsh
 		hs.s = *newS
 	}
 	namePrefix := "Noise_"
-	if hs.psk {
+	if hs.hasPSK {
 		namePrefix = "NoisePSK_"
 	}
 	hs.InitializeSymmetric([]byte(namePrefix + newHandshakePattern.Name + "_" + string(cs.Name())))
 	hs.MixHash(prologue)
-	if hs.psk {
-		hs.MixHash(presharedKey)
+	if len(presharedKey) > 0 {
+		hs.MixPresharedKey(presharedKey)
 	}
 	for _, m := range newHandshakePattern.InitiatorPreMessages {
 		switch {
@@ -195,7 +201,7 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.e = s.cs.GenerateKeypair(s.rng)
 			out = append(out, s.e.Public...)
 			s.MixHash(s.e.Public)
-			if s.psk {
+			if s.hasPSK {
 				s.MixKey(s.e.Public)
 			}
 		case MessagePatternS:
@@ -240,7 +246,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 		switch msg {
 		case MessagePatternE, MessagePatternS:
 			expected := s.cs.DHLen()
-			if msg == MessagePatternS && s.hasKey {
+			if msg == MessagePatternS && s.hasK {
 				expected += 16
 			}
 			if len(message) < expected {
@@ -254,7 +260,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 				s.re = s.re[:s.cs.DHLen()]
 				copy(s.re, message)
 				s.MixHash(s.re)
-				if s.psk {
+				if s.hasPSK {
 					s.MixKey(s.re)
 				}
 			case MessagePatternS:
