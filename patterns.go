@@ -40,7 +40,7 @@ var HandshakeNE = HandshakePattern{
 	Name:                 "NE",
 	ResponderPreMessages: []MessagePattern{MessagePatternS, MessagePatternE},
 	Messages: [][]MessagePattern{
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
 		{MessagePatternE, MessagePatternDHEE},
 	},
 }
