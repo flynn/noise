@@ -95,7 +95,9 @@ func (NoiseSuite) TestVectors(c *C) {
 	var staticR, staticI, ephR DHKey
 	var configI, configR Config
 	var keyInfo patternKeyInfo
-	var payload []byte
+	var name string
+	var payload, psk []byte
+	var csW0, csW1, csR0, csR1 *CipherState
 
 	for {
 		line, _, err := r.ReadLine()
@@ -104,7 +106,7 @@ func (NoiseSuite) TestVectors(c *C) {
 		}
 		c.Assert(err, IsNil)
 
-		if len(bytes.TrimSpace(line)) == 0 {
+		if len(bytes.TrimSpace(line)) == 0 || line[0] == '#' {
 			continue
 		}
 
@@ -119,10 +121,11 @@ func (NoiseSuite) TestVectors(c *C) {
 		case "resp_ephemeral":
 			ephR = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "handshake":
-			c.Log(string(splitLine[1]))
+			name = string(splitLine[1])
+			c.Log(name)
 			configI, configR = Config{Initiator: true}, Config{}
 			hsI, hsR = nil, nil
-			components := strings.SplitN(string(splitLine[1]), "_", 5)
+			components := strings.SplitN(name, "_", 5)
 			keyInfo = patternKeys[components[1]]
 			configI.Pattern = patterns[components[1]]
 			configI.CipherSuite = NewCipherSuite(DH25519, ciphers[components[3]], hashes[components[4]])
@@ -136,8 +139,7 @@ func (NoiseSuite) TestVectors(c *C) {
 			configI.Prologue = mustHex(splitLine[1])
 			configR.Prologue = configI.Prologue
 		case "preshared_key":
-			configI.PresharedKey = mustHex(splitLine[1])
-			configR.PresharedKey = configI.PresharedKey
+			psk = mustHex(splitLine[1])
 		}
 
 		if !bytes.HasPrefix(splitLine[0], []byte("msg_")) {
@@ -165,34 +167,40 @@ func (NoiseSuite) TestVectors(c *C) {
 				configR.EphemeralKeypair = ephR
 				configI.PeerEphemeral = ephR.Public
 			}
+			if strings.HasPrefix(name, "NoisePSK_") {
+				configI.PresharedKey = psk
+				configR.PresharedKey = psk
+			}
 			hsI, hsR = NewHandshakeState(configI), NewHandshakeState(configR)
 		}
 
 		i, _ := strconv.Atoi(string(splitLine[0][4:5]))
+
+		if i > len(configI.Pattern.Messages)-1 {
+			enc, dec := csW0, csR0
+			if (i-len(configI.Pattern.Messages))%2 != 0 {
+				enc, dec = csW1, csR1
+			}
+			encrypted := enc.Encrypt(nil, nil, payload)
+			c.Assert(fmt.Sprintf("%x", encrypted), Equals, string(splitLine[1]))
+			decrypted, err := dec.Decrypt(nil, nil, encrypted)
+			c.Assert(err, IsNil)
+			c.Assert(string(payload), Equals, string(decrypted))
+			payload = nil
+			continue
+		}
 
 		writer, reader := hsI, hsR
 		if i%2 != 0 {
 			writer, reader = hsR, hsI
 		}
 
-		msg, csW0, csW1 := writer.WriteMessage(nil, payload)
+		var msg, res []byte
+		msg, csW0, csW1 = writer.WriteMessage(nil, payload)
 		c.Assert(fmt.Sprintf("%x", msg), Equals, string(splitLine[1]))
-		res, csR0, csR1, err := reader.ReadMessage(nil, msg)
+		res, csR0, csR1, err = reader.ReadMessage(nil, msg)
 		c.Assert(err, IsNil)
 		c.Assert(string(res), Equals, string(payload))
-
-		if i == len(configI.Pattern.Messages) {
-			plain := []byte("yellowsubmarine")
-			encrypted := csW0.Encrypt(nil, nil, plain)
-			decrypted, err := csR0.Decrypt(nil, nil, encrypted)
-			c.Assert(err, IsNil)
-			c.Assert(string(decrypted), Equals, string(plain))
-
-			encrypted = csW1.Encrypt(nil, nil, plain)
-			decrypted, err = csR1.Decrypt(nil, nil, encrypted)
-			c.Assert(err, IsNil)
-			c.Assert(string(decrypted), Equals, string(plain))
-		}
 		payload = nil
 	}
 }

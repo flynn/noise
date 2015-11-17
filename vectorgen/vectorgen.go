@@ -120,12 +120,17 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 
 	fmt.Fprintf(out, "gen_init_ephemeral=%s\n", key3)
 	fmt.Fprintf(out, "gen_resp_ephemeral=%s\n", key4)
-	fmt.Fprintf(out, "prologue=%x\n", prologue)
-	fmt.Fprintf(out, "preshared_key=%x\n", psk)
+	if len(prologue) > 0 {
+		fmt.Fprintf(out, "prologue=%x\n", prologue)
+	}
+	if len(psk) > 0 {
+		fmt.Fprintf(out, "preshared_key=%x\n", psk)
+	}
 
 	hsI := NewHandshakeState(configI)
 	hsR := NewHandshakeState(configR)
 
+	var cs0, cs1 *CipherState
 	for i := range h.Messages {
 		writer, reader := hsI, hsR
 		if i%2 != 0 {
@@ -136,7 +141,8 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 		if payloads {
 			payload = fmt.Sprintf("test_msg_%d", i)
 		}
-		msg, _, _ := writer.WriteMessage(nil, []byte(payload))
+		var msg []byte
+		msg, cs0, cs1 = writer.WriteMessage(nil, []byte(payload))
 		_, _, _, err := reader.ReadMessage(nil, msg)
 		if err != nil {
 			panic(err)
@@ -144,4 +150,11 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 		fmt.Fprintf(out, "msg_%d_payload=%x\n", i, payload)
 		fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", i, msg)
 	}
+
+	payload0 := []byte("yellowsubmarine")
+	payload1 := []byte("submarineyellow")
+	fmt.Fprintf(out, "msg_%d_payload=%x\n", len(h.Messages), payload0)
+	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages), cs0.Encrypt(nil, nil, payload0))
+	fmt.Fprintf(out, "msg_%d_payload=%x\n", len(h.Messages)+1, payload1)
+	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages)+1, cs1.Encrypt(nil, nil, payload1))
 }
