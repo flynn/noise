@@ -151,10 +151,13 @@ func NewHandshakeState(c Config) *HandshakeState {
 		s:               c.StaticKeypair,
 		e:               c.EphemeralKeypair,
 		rs:              c.PeerStatic,
-		re:              c.PeerEphemeral,
 		messagePatterns: c.Pattern.Messages,
 		shouldWrite:     c.Initiator,
 		rng:             c.Random,
+	}
+	if len(c.PeerEphemeral) > 0 {
+		hs.re = make([]byte, len(c.PeerEphemeral))
+		copy(hs.re, c.PeerEphemeral)
 	}
 	hs.SymmetricState.cs = c.CipherSuite
 	namePrefix := "Noise_"
