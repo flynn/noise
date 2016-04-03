@@ -98,6 +98,16 @@ var HandshakeXX = HandshakePattern{
 	},
 }
 
+var HandshakeXR = HandshakePattern{
+	Name: "XR",
+	Messages: [][]MessagePattern{
+		{MessagePatternE},
+		{MessagePatternE, MessagePatternDHEE},
+		{MessagePatternS, MessagePatternDHSE},
+		{MessagePatternS, MessagePatternDHSE},
+	},
+}
+
 var HandshakeIX = HandshakePattern{
 	Name: "IX",
 	Messages: [][]MessagePattern{

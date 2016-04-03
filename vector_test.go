@@ -44,7 +44,7 @@ type patternKeyInfo struct {
 }
 
 func init() {
-	for _, h := range []HandshakePattern{HandshakeNN, HandshakeKN, HandshakeNK, HandshakeKK, HandshakeNX, HandshakeKX, HandshakeXN, HandshakeIN, HandshakeXK, HandshakeIK, HandshakeXX, HandshakeIX, HandshakeN, HandshakeK, HandshakeX} {
+	for _, h := range []HandshakePattern{HandshakeNN, HandshakeKN, HandshakeNK, HandshakeKK, HandshakeNX, HandshakeKX, HandshakeXN, HandshakeIN, HandshakeXK, HandshakeIK, HandshakeXX, HandshakeXR, HandshakeIX, HandshakeN, HandshakeK, HandshakeX} {
 		patterns[h.Name] = h
 		var k patternKeyInfo
 		if len(h.Name) == 1 {
@@ -74,7 +74,7 @@ func init() {
 			case 'K':
 				k.rs = true
 				k.rsi = true
-			case 'X':
+			case 'X', 'R':
 				k.rs = true
 			}
 		}

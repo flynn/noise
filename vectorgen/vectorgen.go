@@ -13,7 +13,7 @@ import (
 func main() {
 	for ci, cipher := range []CipherFunc{CipherAESGCM, CipherChaChaPoly} {
 		for _, hash := range []HashFunc{HashSHA256, HashSHA512, HashBLAKE2b, HashBLAKE2s} {
-			for hi, handshake := range []HandshakePattern{HandshakeNN, HandshakeKN, HandshakeNK, HandshakeKK, HandshakeNX, HandshakeKX, HandshakeXN, HandshakeIN, HandshakeXK, HandshakeIK, HandshakeXX, HandshakeIX, HandshakeN, HandshakeK, HandshakeX} {
+			for hi, handshake := range []HandshakePattern{HandshakeNN, HandshakeKN, HandshakeNK, HandshakeKK, HandshakeNX, HandshakeKX, HandshakeXN, HandshakeIN, HandshakeXK, HandshakeIK, HandshakeXX, HandshakeIX, HandshakeN, HandshakeK, HandshakeX, HandshakeXR} {
 				for _, psk := range []bool{false, true} {
 					payloads := (psk && hi%2 == 0) || (!psk && hi%2 != 0)
 					prologue := ci == 0
@@ -103,7 +103,7 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 			fmt.Fprintf(out, "init_static=%x\n", staticI.Private)
 		}
 		switch h.Name[1] {
-		case 'K', 'E', 'X':
+		case 'K', 'E', 'X', 'R':
 			configR.StaticKeypair = staticR
 			fmt.Fprintf(out, "resp_static=%x\n", staticR.Private)
 			switch h.Name[1] {
