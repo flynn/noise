@@ -3,7 +3,7 @@
 // Noise is a low-level framework for building crypto protocols. Noise protocols
 // support mutual and optional authentication, identity hiding, forward secrecy,
 // zero round-trip encryption, and other advanced features. For more details,
-// visit http://noiseprotocol.org
+// visit http://noiseprotocol.org.
 package noise
 
 import (
@@ -183,7 +183,7 @@ type Config struct {
 	CipherSuite CipherSuite
 
 	// Random is the source for cryptographically appropriate random bytes. If
-	// zero, it is automtically configed.
+	// zero, it is automatically configured.
 	Random io.Reader
 
 	// Pattern is the pattern for the handshake.
