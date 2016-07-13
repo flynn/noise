@@ -403,3 +403,10 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 func (s *HandshakeState) ChannelBinding() []byte {
 	return s.ss.h
 }
+
+// PeerStatic returns the static key provided by the remote peer during
+// a handshake. It is an error to call this method if a handshake message
+// containing a static key has not been read.
+func (s *HandshakeState) PeerStatic() []byte {
+	return s.rs
+}
