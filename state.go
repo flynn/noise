@@ -396,3 +396,10 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 
 	return out, nil, nil, nil
 }
+
+// ChannelBinding provides a value that uniquely identifies the session and can
+// be used as a channel binding. It is an error to call this method before the
+// handshake is complete.
+func (s *HandshakeState) ChannelBinding() []byte {
+	return s.ss.h
+}
