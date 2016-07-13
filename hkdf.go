@@ -5,7 +5,7 @@ import (
 	"hash"
 )
 
-func HKDF(h func() hash.Hash, out1, out2, chainingKey, inputKeyMaterial []byte) ([]byte, []byte) {
+func hkdf(h func() hash.Hash, out1, out2, chainingKey, inputKeyMaterial []byte) ([]byte, []byte) {
 	if len(out1) > 0 {
 		panic("len(out1) > 0")
 	}

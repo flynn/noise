@@ -1,10 +1,19 @@
+// Package noise implements the Noise Protocol Framework.
+//
+// Noise is a low-level framework for building crypto protocols. Noise protocols
+// support mutual and optional authentication, identity hiding, forward secrecy,
+// zero round-trip encryption, and other advanced features. For more details,
+// visit http://noiseprotocol.org
 package noise
 
 import (
+	"crypto/rand"
 	"errors"
 	"io"
 )
 
+// A CipherState provides symmetric encryption and decryption after a successful
+// handshake.
 type CipherState struct {
 	cs CipherSuite
 	c  Cipher
@@ -14,6 +23,10 @@ type CipherState struct {
 	invalid bool
 }
 
+// Encrypt encrypts the plaintext and then appends the ciphertext and an
+// authentication tag across the ciphertext and optional authenticated data to
+// out. This method automatically increments the nonce after every call, so
+// messages must be decrypted in the same order.
 func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
 	if s.invalid {
 		panic("noise: CipherSuite has been copied, state is invalid")
@@ -23,6 +36,10 @@ func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
 	return out
 }
 
+// Decrypt checks the authenticity of the ciphertext and authenticated data and
+// then decrypts and appends the plaintext to out. This method automatically
+// increments the nonce after every call, messages must be provided in the same
+// order that they were encrypted with no missing messages.
 func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 	if s.invalid {
 		panic("noise: CipherSuite has been copied, state is invalid")
@@ -68,7 +85,7 @@ func (s *symmetricState) MixKey(dhOutput []byte) {
 	s.n = 0
 	s.hasK = true
 	var hk []byte
-	s.ck, hk = HKDF(s.cs.Hash, s.ck[:0], s.k[:0], s.ck, dhOutput)
+	s.ck, hk = hkdf(s.cs.Hash, s.ck[:0], s.k[:0], s.ck, dhOutput)
 	copy(s.k[:], hk)
 	s.c = s.cs.Cipher(s.k)
 }
@@ -82,7 +99,7 @@ func (s *symmetricState) MixHash(data []byte) {
 
 func (s *symmetricState) MixPresharedKey(presharedKey []byte) {
 	var temp []byte
-	s.ck, temp = HKDF(s.cs.Hash, s.ck[:0], nil, s.ck, presharedKey)
+	s.ck, temp = hkdf(s.cs.Hash, s.ck[:0], nil, s.ck, presharedKey)
 	s.MixHash(temp)
 	s.hasPSK = true
 }
@@ -112,7 +129,7 @@ func (s *symmetricState) DecryptAndHash(out, data []byte) ([]byte, error) {
 
 func (s *symmetricState) Split() (*CipherState, *CipherState) {
 	s1, s2 := &CipherState{cs: s.cs}, &CipherState{cs: s.cs}
-	hk1, hk2 := HKDF(s.cs.Hash, s1.k[:0], s2.k[:0], s.ck, nil)
+	hk1, hk2 := hkdf(s.cs.Hash, s1.k[:0], s2.k[:0], s.ck, nil)
 	copy(s1.k[:], hk1)
 	copy(s2.k[:], hk2)
 	s1.c = s.cs.Cipher(s1.k)
@@ -120,8 +137,11 @@ func (s *symmetricState) Split() (*CipherState, *CipherState) {
 	return s1, s2
 }
 
+// A MessagePattern is a single message or operation used in a Noise handshake.
 type MessagePattern int
 
+// A HandshakePattern is a list of messages and operations that are used to
+// perform a specific Noise handshake.
 type HandshakePattern struct {
 	Name                 string
 	InitiatorPreMessages []MessagePattern
@@ -138,8 +158,12 @@ const (
 	MessagePatternDHSS
 )
 
+// MaxMsgLen is the maximum number of bytes that can be sent in a single Noise
+// message.
 const MaxMsgLen = 65535
 
+// A HandshakeState tracks the state of a Noise handshake. It may be discarded
+// after the handshake is complete.
 type HandshakeState struct {
 	ss              symmetricState
 	s               DHKey  // local static keypair
@@ -152,19 +176,46 @@ type HandshakeState struct {
 	rng             io.Reader
 }
 
+// A Config provides the details necessary to process a Noise handshake. It is
+// never modified by this package, and can be reused, but care must be taken to
+// generate a new ephemeral key for each handshake if they are used in the
+// pattern.
 type Config struct {
-	CipherSuite      CipherSuite
-	Random           io.Reader
-	Pattern          HandshakePattern
-	Initiator        bool
-	Prologue         []byte
-	PresharedKey     []byte
-	StaticKeypair    DHKey
+	// CipherSuite is the set of cryptographic primitives that will be used.
+	CipherSuite CipherSuite
+
+	// Random is the source for cryptographically appropriate random bytes. If
+	// zero, it is automtically configed.
+	Random io.Reader
+
+	// Pattern is the pattern for the handshake.
+	Pattern HandshakePattern
+
+	// Initiator must be true if the first message in the handshake will be sent
+	// by this peer.
+	Initiator bool
+
+	// Prologue is an optional message that has already be communicated and must
+	// be identical on both sides for the handshake to succeed.
+	Prologue []byte
+
+	// PresharedKey is the optional preshared key for the handshake.
+	PresharedKey []byte
+
+	// StaticKeypair is this peer's static keypair.
+	StaticKeypair DHKey
+
+	// EphemeralKeypair is this peer's static keypair.
 	EphemeralKeypair DHKey
-	PeerStatic       []byte
-	PeerEphemeral    []byte
+
+	// PeerStatic is the static public key of the remote peer.
+	PeerStatic []byte
+
+	// PeerEphemeral is the ephemeral public key of the remote peer.
+	PeerEphemeral []byte
 }
 
+// NewHandshakeState starts a new handshake using the provided configuration.
 func NewHandshakeState(c Config) *HandshakeState {
 	hs := &HandshakeState{
 		s:               c.StaticKeypair,
@@ -173,6 +224,9 @@ func NewHandshakeState(c Config) *HandshakeState {
 		messagePatterns: c.Pattern.Messages,
 		shouldWrite:     c.Initiator,
 		rng:             c.Random,
+	}
+	if hs.rng == nil {
+		hs.rng = rand.Reader
 	}
 	if len(c.PeerEphemeral) > 0 {
 		hs.re = make([]byte, len(c.PeerEphemeral))
@@ -215,6 +269,12 @@ func NewHandshakeState(c Config) *HandshakeState {
 	return hs
 }
 
+// WriteMessage appends a handshake message to out. The message will include the
+// optional payload if provided. If the handshake is completed by the call, two
+// CipherStates will be returned, one is used for encryption of messages to the
+// remote peer, the other is used for decryption of messages from the remote
+// peer. It is an error to call this method out of sync with the handshake
+// pattern.
 func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState, *CipherState) {
 	if !s.shouldWrite {
 		panic("noise: unexpected call to WriteMessage should be ReadMessage")
@@ -262,8 +322,14 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 	return out, nil, nil
 }
 
+// ErrShortMessage is returned by ReadMessage if a message is not as long as it should be.
 var ErrShortMessage = errors.New("noise: message is too short")
 
+// ReadMessage processes a received handshake message and appends the payload,
+// if any to out. If the handshake is completed by the call, two CipherStates
+// will be returned, one is used for encryption of messages to the remote peer,
+// the other is used for decryption of messages from the remote peer. It is an
+// error to call this method out of sync with the handshake pattern.
 func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState, *CipherState, error) {
 	if s.shouldWrite {
 		panic("noise: unexpected call to ReadMessage should be WriteMessage")
