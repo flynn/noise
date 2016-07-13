@@ -177,9 +177,7 @@ type HandshakeState struct {
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
-// never modified by this package, and can be reused, but care must be taken to
-// generate a new ephemeral key for each handshake if they are used in the
-// pattern.
+// never modified by this package, and can be reused.
 type Config struct {
 	// CipherSuite is the set of cryptographic primitives that will be used.
 	CipherSuite CipherSuite
@@ -199,19 +197,23 @@ type Config struct {
 	// be identical on both sides for the handshake to succeed.
 	Prologue []byte
 
-	// PresharedKey is the optional preshared key for the handshake.
+	// PresharedKey is the optional pre-shared key for the handshake.
 	PresharedKey []byte
 
-	// StaticKeypair is this peer's static keypair.
+	// StaticKeypair is this peer's static keypair, required if part of the
+	// handshake.
 	StaticKeypair DHKey
 
-	// EphemeralKeypair is this peer's static keypair.
+	// EphemeralKeypair is this peer's ephemeral keypair that was provided as
+	// a pre-message in the handshake.
 	EphemeralKeypair DHKey
 
-	// PeerStatic is the static public key of the remote peer.
+	// PeerStatic is the static public key of the remote peer that was provided
+	// as a pre-message in the handshake.
 	PeerStatic []byte
 
-	// PeerEphemeral is the ephemeral public key of the remote peer.
+	// PeerEphemeral is the ephemeral public key of the remote peer that was
+	// provided as a pre-message in the handshake.
 	PeerEphemeral []byte
 }
 
