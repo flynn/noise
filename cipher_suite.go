@@ -136,41 +136,39 @@ func (c cipherFn) Cipher(k [32]byte) Cipher { return c.fn(k) }
 func (c cipherFn) CipherName() string       { return c.name }
 
 // CipherAESGCM is the AES256-GCM AEAD cipher.
-var CipherAESGCM CipherFunc = cipherFn{
-	func(k [32]byte) Cipher {
-		c, err := aes.NewCipher(k[:])
-		if err != nil {
-			panic(err)
-		}
-		gcm, err := cipher.NewGCM(c)
-		if err != nil {
-			panic(err)
-		}
-		return aeadCipher{
-			gcm,
-			func(n uint64) []byte {
-				var nonce [12]byte
-				binary.BigEndian.PutUint64(nonce[4:], n)
-				return nonce[:]
-			},
-		}
-	},
-	"AESGCM",
+var CipherAESGCM CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
+
+func cipherAESGCM(k [32]byte) Cipher {
+	c, err := aes.NewCipher(k[:])
+	if err != nil {
+		panic(err)
+	}
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		panic(err)
+	}
+	return aeadCipher{
+		gcm,
+		func(n uint64) []byte {
+			var nonce [12]byte
+			binary.BigEndian.PutUint64(nonce[4:], n)
+			return nonce[:]
+		},
+	}
 }
 
 // CipherChaChaPoly is the ChaCha20-Poly1305 AEAD cipher construction.
-var CipherChaChaPoly CipherFunc = cipherFn{
-	func(k [32]byte) Cipher {
-		return aeadCipher{
-			chap.NewCipher(&k),
-			func(n uint64) []byte {
-				var nonce [12]byte
-				binary.LittleEndian.PutUint64(nonce[4:], n)
-				return nonce[:]
-			},
-		}
-	},
-	"ChaChaPoly",
+var CipherChaChaPoly CipherFunc = cipherFn{cipherChaChaPoly, "ChaChaPoly"}
+
+func cipherChaChaPoly(k [32]byte) Cipher {
+	return aeadCipher{
+		chap.NewCipher(&k),
+		func(n uint64) []byte {
+			var nonce [12]byte
+			binary.LittleEndian.PutUint64(nonce[4:], n)
+			return nonce[:]
+		},
+	}
 }
 
 type aeadCipher struct {
