@@ -312,3 +312,32 @@ func (NoiseSuite) TestPSK_XX(c *C) {
 	expected, _ := hex.DecodeString("2b9c628158a517e3984dc619245d4b9cd73561944f266181b183812ca73499881e30f6e7eeb576c258acc713c2c62874fd1beb76b122f6303f974109aefd7e2a")
 	c.Assert(msg, DeepEquals, expected)
 }
+
+func (NoiseSuite) TestHandshakeRollback(c *C) {
+	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA512)
+	rngI := new(RandomInc)
+	rngR := new(RandomInc)
+	*rngR = 1
+
+	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeNN, Initiator: true})
+	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeNN, Initiator: false})
+
+	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
+	c.Assert(msg, HasLen, 35)
+	res, _, _, err := hsR.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "abc")
+
+	msg, _, _ = hsR.WriteMessage(nil, []byte("defg"))
+	c.Assert(msg, HasLen, 52)
+	prev := msg[1]
+	msg[1] = msg[1] + 1
+	_, _, _, err = hsI.ReadMessage(nil, msg)
+	c.Assert(err, Not(IsNil))
+	msg[1] = prev
+	res, _, _, err = hsI.ReadMessage(nil, msg)
+	c.Assert(string(res), Equals, "defg")
+
+	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c5e4dc9545d41b3280f4586a5481829e1e24ec5a0")
+	c.Assert(msg, DeepEquals, expected)
+}

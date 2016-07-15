@@ -66,6 +66,9 @@ type symmetricState struct {
 	hasPSK bool
 	ck     []byte
 	h      []byte
+
+	prevCK []byte
+	prevH  []byte
 }
 
 func (s *symmetricState) InitializeSymmetric(handshakeName []byte) {
@@ -135,6 +138,27 @@ func (s *symmetricState) Split() (*CipherState, *CipherState) {
 	s1.c = s.cs.Cipher(s1.k)
 	s2.c = s.cs.Cipher(s2.k)
 	return s1, s2
+}
+
+func (s *symmetricState) Checkpoint() {
+	if len(s.ck) > cap(s.prevCK) {
+		s.prevCK = make([]byte, len(s.ck))
+	}
+	s.prevCK = s.prevCK[:len(s.ck)]
+	copy(s.prevCK, s.ck)
+
+	if len(s.h) > cap(s.prevH) {
+		s.prevH = make([]byte, len(s.h))
+	}
+	s.prevH = s.prevH[:len(s.h)]
+	copy(s.prevH, s.h)
+}
+
+func (s *symmetricState) Rollback() {
+	s.ck = s.ck[:len(s.prevCK)]
+	copy(s.ck, s.prevCK)
+	s.h = s.h[:len(s.prevH)]
+	copy(s.h, s.prevH)
 }
 
 // A MessagePattern is a single message or operation used in a Noise handshake.
@@ -340,6 +364,8 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 		panic("noise: no handshake messages left")
 	}
 
+	s.ss.Checkpoint()
+
 	var err error
 	for _, msg := range s.messagePatterns[s.msgIdx] {
 		switch msg {
@@ -369,6 +395,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], message[:expected])
 			}
 			if err != nil {
+				s.ss.Rollback()
 				return nil, nil, nil, err
 			}
 			message = message[expected:]
@@ -382,12 +409,13 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		}
 	}
-	s.shouldWrite = true
-	s.msgIdx++
 	out, err = s.ss.DecryptAndHash(out, message)
 	if err != nil {
+		s.ss.Rollback()
 		return nil, nil, nil, err
 	}
+	s.shouldWrite = true
+	s.msgIdx++
 
 	if s.msgIdx >= len(s.messagePatterns) {
 		cs1, cs2 := s.ss.Split()
