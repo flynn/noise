@@ -27,7 +27,13 @@ func (NoiseSuite) TestN(c *C) {
 	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA256)
 	rng := new(RandomInc)
 	staticR := cs.GenerateKeypair(rng)
-	hs := NewHandshakeState(Config{CipherSuite: cs, Random: rng, Pattern: HandshakeN, Initiator: true, PeerStatic: staticR.Public})
+	hs := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rng,
+		Pattern:     HandshakeN,
+		Initiator:   true,
+		PeerStatic:  staticR.Public,
+	})
 
 	hello, _, _ := hs.WriteMessage(nil, nil)
 	expected, _ := hex.DecodeString("358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd1662548331a3d1e93b490263abc7a4633867f4")
@@ -39,7 +45,14 @@ func (NoiseSuite) TestX(c *C) {
 	rng := new(RandomInc)
 	staticI := cs.GenerateKeypair(rng)
 	staticR := cs.GenerateKeypair(rng)
-	hs := NewHandshakeState(Config{CipherSuite: cs, Random: rng, Pattern: HandshakeX, Initiator: true, StaticKeypair: staticI, PeerStatic: staticR.Public})
+	hs := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rng,
+		Pattern:       HandshakeX,
+		Initiator:     true,
+		StaticKeypair: staticI,
+		PeerStatic:    staticR.Public,
+	})
 
 	hello, _, _ := hs.WriteMessage(nil, nil)
 	expected, _ := hex.DecodeString("79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51ad203cd28d81cf65a2da637f557a05728b3ae4abdc3a42d1cda5f719d6cf41d7f2cf1b1c5af10e38a09a9bb7e3b1d589a99492cc50293eaa1f3f391b59bb6990d")
@@ -52,8 +65,18 @@ func (NoiseSuite) TestNN(c *C) {
 	rngR := new(RandomInc)
 	*rngR = 1
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeNN, Initiator: true})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeNN, Initiator: false})
+	hsI := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngI,
+		Pattern:     HandshakeNN,
+		Initiator:   true,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngR,
+		Pattern:     HandshakeNN,
+		Initiator:   false,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 35)
@@ -80,8 +103,19 @@ func (NoiseSuite) TestXX(c *C) {
 	staticI := cs.GenerateKeypair(rngI)
 	staticR := cs.GenerateKeypair(rngR)
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeXX, Initiator: true, StaticKeypair: staticI})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeXX, StaticKeypair: staticR})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngI,
+		Pattern:       HandshakeXX,
+		Initiator:     true,
+		StaticKeypair: staticI,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngR,
+		Pattern:       HandshakeXX,
+		StaticKeypair: staticR,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 35)
@@ -114,8 +148,22 @@ func (NoiseSuite) TestIK(c *C) {
 	staticI := cs.GenerateKeypair(rngI)
 	staticR := cs.GenerateKeypair(rngR)
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeIK, Initiator: true, Prologue: []byte("ABC"), StaticKeypair: staticI, PeerStatic: staticR.Public})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeIK, Prologue: []byte("ABC"), StaticKeypair: staticR})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngI,
+		Pattern:       HandshakeIK,
+		Initiator:     true,
+		Prologue:      []byte("ABC"),
+		StaticKeypair: staticI,
+		PeerStatic:    staticR.Public,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngR,
+		Pattern:       HandshakeIK,
+		Prologue:      []byte("ABC"),
+		StaticKeypair: staticR,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 99)
@@ -142,8 +190,19 @@ func (NoiseSuite) TestXXRoundtrip(c *C) {
 	staticI := cs.GenerateKeypair(rngI)
 	staticR := cs.GenerateKeypair(rngR)
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeXX, Initiator: true, StaticKeypair: staticI})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeXX, StaticKeypair: staticR})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngI,
+		Pattern:       HandshakeXX,
+		Initiator:     true,
+		StaticKeypair: staticI,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngR,
+		Pattern:       HandshakeXX,
+		StaticKeypair: staticR,
+	})
 
 	// -> e
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abcdef"))
@@ -192,8 +251,19 @@ func (NoiseSuite) TestPSK_NN_Roundtrip(c *C) {
 	rngR := new(RandomInc)
 	*rngR = 1
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeNN, Initiator: true, PresharedKey: []byte("supersecret")})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeNN, PresharedKey: []byte("supersecret")})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:  cs,
+		Random:       rngI,
+		Pattern:      HandshakeNN,
+		Initiator:    true,
+		PresharedKey: []byte("supersecret"),
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:  cs,
+		Random:       rngR,
+		Pattern:      HandshakeNN,
+		PresharedKey: []byte("supersecret"),
+	})
 
 	// -> e
 	msg, _, _ := hsI.WriteMessage(nil, nil)
@@ -227,7 +297,14 @@ func (NoiseSuite) TestPSK_N(c *C) {
 	rng := new(RandomInc)
 	staticR := cs.GenerateKeypair(rng)
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rng, Pattern: HandshakeN, Initiator: true, PresharedKey: []byte{0x01, 0x02, 0x03}, PeerStatic: staticR.Public})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:  cs,
+		Random:       rng,
+		Pattern:      HandshakeN,
+		Initiator:    true,
+		PresharedKey: []byte{0x01, 0x02, 0x03},
+		PeerStatic:   staticR.Public,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, nil)
 	c.Assert(msg, HasLen, 48)
@@ -242,7 +319,15 @@ func (NoiseSuite) TestPSK_X(c *C) {
 	staticI := cs.GenerateKeypair(rng)
 	staticR := cs.GenerateKeypair(rng)
 
-	hs := NewHandshakeState(Config{CipherSuite: cs, Random: rng, Pattern: HandshakeX, Initiator: true, PresharedKey: []byte{0x01, 0x02, 0x03}, StaticKeypair: staticI, PeerStatic: staticR.Public})
+	hs := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rng,
+		Pattern:       HandshakeX,
+		Initiator:     true,
+		PresharedKey:  []byte{0x01, 0x02, 0x03},
+		StaticKeypair: staticI,
+		PeerStatic:    staticR.Public,
+	})
 	msg, _, _ := hs.WriteMessage(nil, nil)
 	c.Assert(msg, HasLen, 96)
 
@@ -258,8 +343,21 @@ func (NoiseSuite) TestPSK_NN(c *C) {
 	prologue := []byte{0x01, 0x02, 0x03}
 	psk := []byte{0x04, 0x05, 0x06}
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeNN, Initiator: true, Prologue: prologue, PresharedKey: psk})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeNN, Prologue: prologue, PresharedKey: psk})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:  cs,
+		Random:       rngI,
+		Pattern:      HandshakeNN,
+		Initiator:    true,
+		Prologue:     prologue,
+		PresharedKey: psk,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:  cs,
+		Random:       rngR,
+		Pattern:      HandshakeNN,
+		Prologue:     prologue,
+		PresharedKey: psk,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 51)
@@ -288,8 +386,23 @@ func (NoiseSuite) TestPSK_XX(c *C) {
 	prologue := []byte{0x01, 0x02, 0x03}
 	psk := []byte{0x04, 0x05, 0x06}
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeXX, Initiator: true, Prologue: prologue, PresharedKey: psk, StaticKeypair: staticI})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeXX, Prologue: prologue, PresharedKey: psk, StaticKeypair: staticR})
+	hsI := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngI,
+		Pattern:       HandshakeXX,
+		Initiator:     true,
+		Prologue:      prologue,
+		PresharedKey:  psk,
+		StaticKeypair: staticI,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngR,
+		Pattern:       HandshakeXX,
+		Prologue:      prologue,
+		PresharedKey:  psk,
+		StaticKeypair: staticR,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 51)
@@ -319,8 +432,18 @@ func (NoiseSuite) TestHandshakeRollback(c *C) {
 	rngR := new(RandomInc)
 	*rngR = 1
 
-	hsI := NewHandshakeState(Config{CipherSuite: cs, Random: rngI, Pattern: HandshakeNN, Initiator: true})
-	hsR := NewHandshakeState(Config{CipherSuite: cs, Random: rngR, Pattern: HandshakeNN, Initiator: false})
+	hsI := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngI,
+		Pattern:     HandshakeNN,
+		Initiator:   true,
+	})
+	hsR := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngR,
+		Pattern:     HandshakeNN,
+		Initiator:   false,
+	})
 
 	msg, _, _ := hsI.WriteMessage(nil, []byte("abc"))
 	c.Assert(msg, HasLen, 35)
