@@ -10,9 +10,9 @@ import (
 	"hash"
 	"io"
 
-	"github.com/devi/blake2/blake2s"
 	"github.com/devi/chap"
 	"github.com/minio/blake2b-simd"
+	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -201,5 +201,13 @@ var HashSHA512 HashFunc = hashFn{sha512.New, "SHA512"}
 // HashBLAKE2b is the BLAKE2b hash function.
 var HashBLAKE2b HashFunc = hashFn{blake2b.New512, "BLAKE2b"}
 
+func blake2sNew() hash.Hash {
+	h, err := blake2s.New256(nil)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
 // HashBLAKE2s is the BLAKE2s hash function.
-var HashBLAKE2s HashFunc = hashFn{blake2s.New, "BLAKE2s"}
+var HashBLAKE2s HashFunc = hashFn{blake2sNew, "BLAKE2s"}
