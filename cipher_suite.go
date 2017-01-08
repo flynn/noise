@@ -10,9 +10,9 @@ import (
 	"hash"
 	"io"
 
-	"github.com/devi/chap"
 	"github.com/minio/blake2b-simd"
 	"golang.org/x/crypto/blake2s"
+	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
 
@@ -161,8 +161,12 @@ func cipherAESGCM(k [32]byte) Cipher {
 var CipherChaChaPoly CipherFunc = cipherFn{cipherChaChaPoly, "ChaChaPoly"}
 
 func cipherChaChaPoly(k [32]byte) Cipher {
+	c, err := chacha20poly1305.New(k[:])
+	if err != nil {
+		panic(err)
+	}
 	return aeadCipher{
-		chap.NewCipher(&k),
+		c,
 		func(n uint64) []byte {
 			var nonce [12]byte
 			binary.LittleEndian.PutUint64(nonce[4:], n)
