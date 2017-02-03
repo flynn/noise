@@ -71,6 +71,10 @@ type symmetricState struct {
 	prevH  []byte
 }
 
+func (s *symmetricState) GetH() []byte {
+	return s.h
+}
+
 func (s *symmetricState) InitializeSymmetric(handshakeName []byte) {
 	h := s.cs.Hash()
 	if len(handshakeName) <= h.Size() {
@@ -198,6 +202,10 @@ type HandshakeState struct {
 	shouldWrite     bool
 	msgIdx          int
 	rng             io.Reader
+	initiator       bool
+	prologue        []byte
+	presharedKey    []byte
+	cipherSuite     CipherSuite
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
@@ -243,56 +251,90 @@ type Config struct {
 
 // NewHandshakeState starts a new handshake using the provided configuration.
 func NewHandshakeState(c Config) *HandshakeState {
-	hs := &HandshakeState{
-		s:               c.StaticKeypair,
-		e:               c.EphemeralKeypair,
-		rs:              c.PeerStatic,
-		messagePatterns: c.Pattern.Messages,
-		shouldWrite:     c.Initiator,
-		rng:             c.Random,
-	}
-	if hs.rng == nil {
-		hs.rng = rand.Reader
+	hs := &HandshakeState{}
+	hs.start(c)
+	return hs
+}
+
+// start (re)initializes an existing HandshakeState with provided config values
+func (s *HandshakeState) start(c Config) {
+
+	s.s = c.StaticKeypair
+	s.rs = c.PeerStatic
+	s.messagePatterns = c.Pattern.Messages
+	s.shouldWrite = c.Initiator
+	s.rng = c.Random
+	s.msgIdx = 0
+	s.initiator = c.Initiator
+	s.cipherSuite = c.CipherSuite
+	s.ss = symmetricState{}
+	s.e = c.EphemeralKeypair
+
+	if s.rng == nil {
+		s.rng = rand.Reader
 	}
 	if len(c.PeerEphemeral) > 0 {
-		hs.re = make([]byte, len(c.PeerEphemeral))
-		copy(hs.re, c.PeerEphemeral)
+		s.re = make([]byte, len(c.PeerEphemeral))
+		copy(s.re, c.PeerEphemeral)
 	}
-	hs.ss.cs = c.CipherSuite
+
+	if len(c.Prologue) > 0 {
+		s.prologue = make([]byte, len(c.Prologue))
+		copy(s.prologue, c.Prologue)
+	} else {
+		s.prologue = nil
+	}
+
+	s.ss.cs = c.CipherSuite
 	namePrefix := "Noise_"
 	if len(c.PresharedKey) > 0 {
+		s.presharedKey = make([]byte, len(c.PresharedKey))
+		copy(s.presharedKey, c.PresharedKey)
 		namePrefix = "NoisePSK_"
+	} else {
+		s.presharedKey = nil
 	}
-	hs.ss.InitializeSymmetric([]byte(namePrefix + c.Pattern.Name + "_" + string(hs.ss.cs.Name())))
-	hs.ss.MixHash(c.Prologue)
+	s.ss.InitializeSymmetric([]byte(namePrefix + c.Pattern.Name + "_" + string(s.ss.cs.Name())))
+
+	s.ss.MixHash(c.Prologue)
 	if len(c.PresharedKey) > 0 {
-		hs.ss.MixPresharedKey(c.PresharedKey)
+		s.ss.MixPresharedKey(c.PresharedKey)
 	}
 	for _, m := range c.Pattern.InitiatorPreMessages {
 		switch {
 		case c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.s.Public)
+			s.ss.MixHash(s.s.Public)
 		case c.Initiator && m == MessagePatternE:
-			hs.ss.MixHash(hs.e.Public)
+			s.ss.MixHash(s.e.Public)
 		case !c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.rs)
+			s.ss.MixHash(s.rs)
 		case !c.Initiator && m == MessagePatternE:
-			hs.ss.MixHash(hs.re)
+			s.ss.MixHash(s.re)
 		}
 	}
 	for _, m := range c.Pattern.ResponderPreMessages {
 		switch {
 		case !c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.s.Public)
+			s.ss.MixHash(s.s.Public)
 		case !c.Initiator && m == MessagePatternE:
-			hs.ss.MixHash(hs.e.Public)
+			s.ss.MixHash(s.e.Public)
+			if len(c.PresharedKey) > 0 {
+				s.ss.MixKey(s.e.Public)
+			}
+
 		case c.Initiator && m == MessagePatternS:
-			hs.ss.MixHash(hs.rs)
+			s.ss.MixHash(s.rs)
 		case c.Initiator && m == MessagePatternE:
-			hs.ss.MixHash(hs.re)
+			if len(s.re) == 0 {
+				panic("noise: invalid state, re is nil")
+			}
+			s.ss.MixHash(s.re)
+			if len(c.PresharedKey) > 0 {
+				s.ss.MixKey(s.re)
+			}
+
 		}
 	}
-	return hs
 }
 
 // WriteMessage appends a handshake message to out. The message will include the
@@ -315,7 +357,9 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 	for _, msg := range s.messagePatterns[s.msgIdx] {
 		switch msg {
 		case MessagePatternE:
-			s.e = s.ss.cs.GenerateKeypair(s.rng)
+			if len(s.e.Private) == 0 {
+				s.e = s.ss.cs.GenerateKeypair(s.rng)
+			}
 			out = append(out, s.e.Public...)
 			s.ss.MixHash(s.e.Public)
 			if s.ss.hasPSK {
@@ -437,4 +481,40 @@ func (s *HandshakeState) ChannelBinding() []byte {
 // containing a static key has not been read.
 func (s *HandshakeState) PeerStatic() []byte {
 	return s.rs
+}
+
+var ciphers = map[string]CipherFunc{
+	"AESGCM":     CipherAESGCM,
+	"ChaChaPoly": CipherChaChaPoly,
+}
+var hashes = map[string]HashFunc{
+	"SHA256":  HashSHA256,
+	"SHA512":  HashSHA512,
+	"BLAKE2b": HashBLAKE2b,
+	"BLAKE2s": HashBLAKE2s,
+}
+
+// Fallback falls back from Noise_IK to Noise_XXfallback pattern
+// It switches roles and uses ephemeral key, sent by initiator, as a pre-message.
+// It reuses e & s.
+func (s *HandshakeState) Fallback() {
+
+	if s.initiator && len(s.e.Private) == 0 {
+		panic("ephemeral key has not yet been initialized")
+	}
+
+	c := Config{
+		CipherSuite:      NewCipherSuite(DH25519, ciphers[s.cipherSuite.CipherName()], hashes[s.cipherSuite.HashName()]),
+		Pattern:          HandshakeXXfallback,
+		StaticKeypair:    s.s,
+		EphemeralKeypair: s.e,
+		PeerStatic:       nil,
+		PeerEphemeral:    s.re,
+		Initiator:        !s.initiator,
+		Prologue:         s.prologue,
+		PresharedKey:     s.presharedKey,
+		Random:           s.rng,
+	}
+
+	s.start(c)
 }
