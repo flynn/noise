@@ -49,6 +49,21 @@ func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 	return out, err
 }
 
+// Return current nonce counter value. This value will be one past the previous
+// usage as it's auto-incremeted after each Encrypt/Decrypt operation.
+func (s *CipherSuite) Nonce() uint64 {
+	return s.n
+}
+
+// Set the current nonce counter value. This will be used by the next
+// Encrypt/Decrypt operation. WARNING: You must be careful to never reuse
+// nonce values! This is exposed to allow the counter to be carried along
+// with an encrypted message and used by the decryption operation, such
+// as in out-of-order messsaging systems (such as UDP).
+func (s *CipherSuite) SetNonce(v uint64) {
+	s.n = v
+}
+
 // Cipher returns the low-level symmetric encryption primitive. It should only
 // be used if nonces need to be managed manually, for example with a network
 // protocol that can deliver out-of-order messages. This is dangerous, users
