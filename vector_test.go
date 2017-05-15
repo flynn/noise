@@ -139,11 +139,16 @@ func (NoiseSuite) TestVectors(c *C) {
 			configI, configR = Config{Initiator: true}, Config{}
 			hsI, hsR = nil, nil
 			components := strings.SplitN(name, "_", 5)
-			keyInfo = patternKeys[components[1]]
-			configI.Pattern = patterns[components[1]]
+			handshakeComponents := strings.Split(components[1], "psk")
+			if len(handshakeComponents) == 2 {
+				configI.PresharedKeyPlacement, _ = strconv.Atoi(handshakeComponents[1])
+			}
+			keyInfo = patternKeys[handshakeComponents[0]]
+			configI.Pattern = patterns[handshakeComponents[0]]
 			configI.CipherSuite = NewCipherSuite(DH25519, ciphers[components[3]], hashes[components[4]])
 			configR.Pattern = configI.Pattern
 			configR.CipherSuite = configI.CipherSuite
+			configR.PresharedKeyPlacement = configI.PresharedKeyPlacement
 		case "gen_init_ephemeral":
 			configI.Random = hexReader(splitLine[1])
 		case "gen_resp_ephemeral":
@@ -180,7 +185,7 @@ func (NoiseSuite) TestVectors(c *C) {
 				configR.EphemeralKeypair = ephR
 				configI.PeerEphemeral = ephR.Public
 			}
-			if strings.HasPrefix(name, "NoisePSK_") {
+			if strings.Index(name, "psk") != -1 {
 				configI.PresharedKey = psk
 				configR.PresharedKey = psk
 			}

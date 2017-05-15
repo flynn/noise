@@ -245,7 +245,7 @@ func (NoiseSuite) TestXXRoundtrip(c *C) {
 	c.Assert(string(res), Equals, "worri")
 }
 
-func (NoiseSuite) TestPSK_NN_Roundtrip(c *C) {
+func (NoiseSuite) Test_NNpsk0_Roundtrip(c *C) {
 	cs := NewCipherSuite(DH25519, CipherChaChaPoly, HashBLAKE2b)
 	rngI := new(RandomInc)
 	rngR := new(RandomInc)
@@ -256,13 +256,13 @@ func (NoiseSuite) TestPSK_NN_Roundtrip(c *C) {
 		Random:       rngI,
 		Pattern:      HandshakeNN,
 		Initiator:    true,
-		PresharedKey: []byte("supersecret"),
+		PresharedKey: []byte("supersecretsupersecretsupersecre"),
 	})
 	hsR := NewHandshakeState(Config{
 		CipherSuite:  cs,
 		Random:       rngR,
 		Pattern:      HandshakeNN,
-		PresharedKey: []byte("supersecret"),
+		PresharedKey: []byte("supersecretsupersecretsupersecre"),
 	})
 
 	// -> e
@@ -292,7 +292,7 @@ func (NoiseSuite) TestPSK_NN_Roundtrip(c *C) {
 	c.Assert(string(res), Equals, "bar")
 }
 
-func (NoiseSuite) TestPSK_N(c *C) {
+func (NoiseSuite) Test_Npsk0(c *C) {
 	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA256)
 	rng := new(RandomInc)
 	staticR := cs.GenerateKeypair(rng)
@@ -302,18 +302,18 @@ func (NoiseSuite) TestPSK_N(c *C) {
 		Random:       rng,
 		Pattern:      HandshakeN,
 		Initiator:    true,
-		PresharedKey: []byte{0x01, 0x02, 0x03},
+		PresharedKey: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20},
 		PeerStatic:   staticR.Public,
 	})
 
 	msg, _, _ := hsI.WriteMessage(nil, nil)
 	c.Assert(msg, HasLen, 48)
 
-	expected, _ := hex.DecodeString("358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd16625475344a60649da3ec23ce8e3ed779e766")
+	expected, _ := hex.DecodeString("358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd1662542044ae563929068930dcf04674526cb9")
 	c.Assert(msg, DeepEquals, expected)
 }
 
-func (NoiseSuite) TestPSK_X(c *C) {
+func (NoiseSuite) Test_Xpsk0(c *C) {
 	cs := NewCipherSuite(DH25519, CipherChaChaPoly, HashSHA256)
 	rng := new(RandomInc)
 	staticI := cs.GenerateKeypair(rng)
@@ -324,24 +324,24 @@ func (NoiseSuite) TestPSK_X(c *C) {
 		Random:        rng,
 		Pattern:       HandshakeX,
 		Initiator:     true,
-		PresharedKey:  []byte{0x01, 0x02, 0x03},
+		PresharedKey:  []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20},
 		StaticKeypair: staticI,
 		PeerStatic:    staticR.Public,
 	})
 	msg, _, _ := hs.WriteMessage(nil, nil)
 	c.Assert(msg, HasLen, 96)
 
-	expected, _ := hex.DecodeString("79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51a12d5cf01bc576e8f0124b14db3ed7a00d20f16186e8f1e2c861fb3d4113f39b290f0048404b8d21e2098958b6bdf50f41dfb1143700310482cfb52c9002261bd")
+	expected, _ := hex.DecodeString("79a631eede1bf9c98f12032cdeadd0e7a079398fc786b88cc846ec89af85a51ad51eef529db0dd9127d4aa59a9183e118337d75a4e55e7e00f85c3d20ede536dd0112eec8c3b2a514018a90ab685b027dd24aa0c70b0c0f00524cc23785028b9")
 	c.Assert(msg, DeepEquals, expected)
 }
 
-func (NoiseSuite) TestPSK_NN(c *C) {
+func (NoiseSuite) Test_NNpsk0(c *C) {
 	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA512)
 	rngI := new(RandomInc)
 	rngR := new(RandomInc)
 	*rngR = 1
 	prologue := []byte{0x01, 0x02, 0x03}
-	psk := []byte{0x04, 0x05, 0x06}
+	psk := []byte{0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23}
 
 	hsI := NewHandshakeState(Config{
 		CipherSuite:  cs,
@@ -371,11 +371,11 @@ func (NoiseSuite) TestPSK_NN(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "defg")
 
-	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cfda657b21e8eac78df67b6bd453c0b11372364a6")
+	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c3e42e140cfffbcdf5d9d2a1c24ce4cdbdf1eaf37")
 	c.Assert(msg, DeepEquals, expected)
 }
 
-func (NoiseSuite) TestPSK_XX(c *C) {
+func (NoiseSuite) Test_XXpsk0(c *C) {
 	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA256)
 	rngI := new(RandomInc)
 	rngR := new(RandomInc)
@@ -384,7 +384,7 @@ func (NoiseSuite) TestPSK_XX(c *C) {
 	staticI := cs.GenerateKeypair(rngI)
 	staticR := cs.GenerateKeypair(rngR)
 	prologue := []byte{0x01, 0x02, 0x03}
-	psk := []byte{0x04, 0x05, 0x06}
+	psk := []byte{0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23}
 
 	hsI := NewHandshakeState(Config{
 		CipherSuite:   cs,
@@ -422,7 +422,7 @@ func (NoiseSuite) TestPSK_XX(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(res, HasLen, 0)
 
-	expected, _ := hex.DecodeString("2b9c628158a517e3984dc619245d4b9cd73561944f266181b183812ca73499881e30f6e7eeb576c258acc713c2c62874fd1beb76b122f6303f974109aefd7e2a")
+	expected, _ := hex.DecodeString("1b6d7cc3b13bd02217f9cdb98c50870db96281193dca4df570bf6230a603b686fd90d2914c7e797d9276ef8fb34b0c9d87faa048ce4bc7e7af21b6a450352275")
 	c.Assert(msg, DeepEquals, expected)
 }
 
