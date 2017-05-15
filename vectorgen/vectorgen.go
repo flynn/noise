@@ -31,13 +31,15 @@ func main() {
 				HandshakeX,
 				HandshakeXR,
 			} {
-				for _, psk := range []bool{false, true} {
+				for pskPlacement := -1; pskPlacement <= len(handshake.Messages); pskPlacement++ {
+					psk := pskPlacement >= 0
 					payloads := (psk && hi%2 == 0) || (!psk && hi%2 != 0)
 					prologue := ci == 0
 					writeHandshake(
 						os.Stdout,
 						NewCipherSuite(DH25519, cipher, hash),
-						handshake, psk, prologue, payloads,
+						handshake, pskPlacement,
+						psk, prologue, payloads,
 					)
 					fmt.Fprintln(os.Stdout)
 				}
@@ -62,7 +64,7 @@ const (
 	key4 = "4142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f60"
 )
 
-func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, hasPrologue, payloads bool) {
+func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacement int, hasPSK, hasPrologue, payloads bool) {
 	var prologue, psk []byte
 	if hasPrologue {
 		prologue = []byte("notsecret")
@@ -82,6 +84,7 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 		Initiator:    true,
 		Prologue:     prologue,
 		PresharedKey: psk,
+		PresharedKeyPlacement: pskPlacement,
 	}
 	configR := configI
 	configR.Random = hexReader(key4)
@@ -89,10 +92,10 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 
 	var pskName string
 	if hasPSK {
-		pskName = "PSK"
+		pskName = fmt.Sprintf("psk%d", pskPlacement)
 	}
 
-	fmt.Fprintf(out, "handshake=Noise%s_%s_%s\n", pskName, h.Name, cs.Name())
+	fmt.Fprintf(out, "handshake=Noise_%s%s_%s\n", h.Name, pskName, cs.Name())
 
 	if len(h.Name) == 1 {
 		switch h.Name {
