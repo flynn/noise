@@ -11,9 +11,9 @@ import (
 )
 
 func main() {
-	for ci, cipher := range []CipherFunc{CipherAESGCM, CipherChaChaPoly} {
+	for _, cipher := range []CipherFunc{CipherAESGCM, CipherChaChaPoly} {
 		for _, hash := range []HashFunc{HashSHA256, HashSHA512, HashBLAKE2b, HashBLAKE2s} {
-			for hi, handshake := range []HandshakePattern{
+			for _, handshake := range []HandshakePattern{
 				HandshakeNN,
 				HandshakeKN,
 				HandshakeNK,
@@ -31,17 +31,18 @@ func main() {
 				HandshakeX,
 				HandshakeXR,
 			} {
-				for pskPlacement := -1; pskPlacement <= len(handshake.Messages); pskPlacement++ {
-					psk := pskPlacement >= 0
-					payloads := (psk && hi%2 == 0) || (!psk && hi%2 != 0)
-					prologue := ci == 0
-					writeHandshake(
-						os.Stdout,
-						NewCipherSuite(DH25519, cipher, hash),
-						handshake, pskPlacement,
-						psk, prologue, payloads,
-					)
-					fmt.Fprintln(os.Stdout)
+				for _, prologue := range []bool{false, true} {
+					for _, payloads := range []bool{false, true} {
+						for pskPlacement := -1; pskPlacement <= len(handshake.Messages); pskPlacement++ {
+							writeHandshake(
+								os.Stdout,
+								NewCipherSuite(DH25519, cipher, hash),
+								handshake, pskPlacement,
+								pskPlacement >= 0, prologue, payloads,
+							)
+							fmt.Fprintln(os.Stdout)
+						}
+					}
 				}
 			}
 		}
