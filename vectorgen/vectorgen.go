@@ -68,7 +68,7 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, hasPSK, h
 		prologue = []byte("notsecret")
 	}
 	if hasPSK {
-		psk = []byte("verysecret")
+		psk = []byte("!verysecretverysecretverysecret!")
 	}
 
 	staticI := cs.GenerateKeypair(hexReader(key0))
