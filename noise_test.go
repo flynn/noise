@@ -2,7 +2,6 @@ package noise
 
 import (
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -516,25 +515,30 @@ func TestRekey(t *testing.T) {
 	oldK := csI0.k
 	csI0.Rekey()
 	assert.NotEqual(oldK, csI0.k, "should NOT be equal")
+	csR0.Rekey()
+
+	clientMessage = []byte("hello again")
+	msg = csI0.Encrypt(nil, nil, clientMessage)
+	res, err = csR0.Decrypt(nil, nil, msg)
+	assert.Equal(clientMessage, res, "server received unexpected message")
 
 	serverMessage := []byte("bye")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	assert.Equal(serverMessage, res, "client received unexpected message")
 
+	csR1.Rekey()
+	csI1.Rekey()
+
 	serverMessage = []byte("bye bye")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	assert.Equal(serverMessage, res, "client received unexpected message")
 
-	clientMessage = []byte("hello again")
-	msg = csI0.Encrypt(nil, nil, clientMessage)
-	res, err = csR0.Decrypt(nil, nil, msg)
-	fmt.Println("server decrypt message from client:", string(res))
-	assert.Equal(clientMessage, res, "server received unexpected message")
-
+	// only rekey one side, test for failure
+	csR1.Rekey()
 	serverMessage = []byte("bye again")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
-	assert.Equal(serverMessage, res, "client received unexpected message")
+	assert.NotEqual(serverMessage, res, "client received unexpected message")
 }

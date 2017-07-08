@@ -67,6 +67,7 @@ func (s *CipherState) Rekey() {
 	var out []byte
 	out = s.c.Encrypt(out, math.MaxUint64, []byte{}, zeros[:])
 	copy(s.k[:], out[:32])
+	s.c = s.cs.Cipher(s.k)
 }
 
 type symmetricState struct {
