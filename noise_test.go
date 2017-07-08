@@ -2,8 +2,10 @@ package noise
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	. "gopkg.in/check.v1"
 )
 
@@ -463,4 +465,76 @@ func (NoiseSuite) TestHandshakeRollback(c *C) {
 
 	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c5e4dc9545d41b3280f4586a5481829e1e24ec5a0")
 	c.Assert(msg, DeepEquals, expected)
+}
+
+func TestRekey(t *testing.T) {
+	assert := assert.New(t)
+
+	rng := new(RandomInc)
+
+	clientStaticKeypair := DH25519.GenerateKeypair(rng)
+	clientConfig := Config{}
+	clientConfig.CipherSuite = NewCipherSuite(DH25519, CipherChaChaPoly, HashBLAKE2b)
+	clientConfig.Random = rng
+	clientConfig.Pattern = HandshakeNN
+	clientConfig.Initiator = true
+	clientConfig.Prologue = []byte{0}
+	clientConfig.StaticKeypair = clientStaticKeypair
+	clientConfig.EphemeralKeypair = DH25519.GenerateKeypair(rng)
+	clientHs := NewHandshakeState(clientConfig)
+
+	serverStaticKeypair := DH25519.GenerateKeypair(rng)
+	serverConfig := Config{}
+	serverConfig.CipherSuite = NewCipherSuite(DH25519, CipherChaChaPoly, HashBLAKE2b)
+	serverConfig.Random = rng
+	serverConfig.Pattern = HandshakeNN
+	serverConfig.Initiator = false
+	serverConfig.Prologue = []byte{0}
+	serverConfig.StaticKeypair = serverStaticKeypair
+	serverConfig.EphemeralKeypair = DH25519.GenerateKeypair(rng)
+	serverHs := NewHandshakeState(serverConfig)
+
+	clientHsMsg, _, _ := clientHs.WriteMessage(nil, nil)
+	assert.Equal(32, len(clientHsMsg), "client handshake message is unexpected size")
+
+	serverHsResult, _, _, err := serverHs.ReadMessage(nil, clientHsMsg)
+	assert.NoError(err, "server failed to read client handshake message")
+	assert.Equal(0, len(serverHsResult), "server result message is unexpected size")
+
+	serverHsMsg, csR0, csR1 := serverHs.WriteMessage(nil, nil)
+	assert.Equal(48, len(serverHsMsg), "server handshake message is unexpected size")
+
+	clientHsResult, csI0, csI1, err := clientHs.ReadMessage(nil, serverHsMsg)
+	assert.NoError(err, "client failed to read server handshake message")
+	assert.Equal(0, len(clientHsResult), "client result message is unexpected size")
+
+	clientMessage := []byte("hello")
+	msg := csI0.Encrypt(nil, nil, clientMessage)
+	res, err := csR0.Decrypt(nil, nil, msg)
+	assert.Equal(clientMessage, res, "server received unexpected message")
+
+	oldK := csI0.k
+	csI0.Rekey()
+	assert.NotEqual(oldK, csI0.k, "should NOT be equal")
+
+	serverMessage := []byte("bye")
+	msg = csR1.Encrypt(nil, nil, serverMessage)
+	res, err = csI1.Decrypt(nil, nil, msg)
+	assert.Equal(serverMessage, res, "client received unexpected message")
+
+	serverMessage = []byte("bye bye")
+	msg = csR1.Encrypt(nil, nil, serverMessage)
+	res, err = csI1.Decrypt(nil, nil, msg)
+	assert.Equal(serverMessage, res, "client received unexpected message")
+
+	clientMessage = []byte("hello again")
+	msg = csI0.Encrypt(nil, nil, clientMessage)
+	res, err = csR0.Decrypt(nil, nil, msg)
+	fmt.Println("server decrypt message from client:", string(res))
+	assert.Equal(clientMessage, res, "server received unexpected message")
+
+	serverMessage = []byte("bye again")
+	msg = csR1.Encrypt(nil, nil, serverMessage)
+	res, err = csI1.Decrypt(nil, nil, msg)
+	assert.Equal(serverMessage, res, "client received unexpected message")
 }
