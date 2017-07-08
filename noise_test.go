@@ -511,7 +511,7 @@ func (NoiseSuite) TestRekey(c *C) {
 
 	oldK := csI0.k
 	csI0.Rekey()
-	c.Assert(oldK == csI0.k, Equals, false)
+	c.Assert(oldK, Not(Equals), csI0.k)
 	csR0.Rekey()
 
 	clientMessage = []byte("hello again")
@@ -537,5 +537,5 @@ func (NoiseSuite) TestRekey(c *C) {
 	serverMessage = []byte("bye again")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
-	c.Assert(string(serverMessage) == string(res), Equals, false)
+	c.Assert(string(serverMessage), Not(Equals), string(res))
 }
