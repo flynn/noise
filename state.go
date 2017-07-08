@@ -64,7 +64,7 @@ func (s *CipherState) Cipher() Cipher {
 
 func (s *CipherState) Rekey() {
 	var zeros [32]byte
-	s.k = s.c.Encrypt(s.k, math.MaxUint64, []byte{}, zeros[:])
+	s.c.Encrypt(s.k[:], math.MaxUint64, []byte{}, zeros[:])
 }
 
 type symmetricState struct {
