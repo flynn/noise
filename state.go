@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // A CipherState provides symmetric encryption and decryption after a successful
@@ -59,6 +60,14 @@ func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 func (s *CipherState) Cipher() Cipher {
 	s.invalid = true
 	return s.c
+}
+
+func (s *CipherState) Rekey() {
+	var zeros [32]byte
+	var out []byte
+	out = s.c.Encrypt(out, math.MaxUint64, []byte{}, zeros[:])
+	copy(s.k[:], out[:32])
+	s.c = s.cs.Cipher(s.k)
 }
 
 type symmetricState struct {
