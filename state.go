@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // A CipherState provides symmetric encryption and decryption after a successful
@@ -61,11 +62,19 @@ func (s *CipherState) Cipher() Cipher {
 	return s.c
 }
 
+func (s *CipherState) Rekey() {
+	var zeros [32]byte
+	var out []byte
+	out = s.c.Encrypt(out, math.MaxUint64, []byte{}, zeros[:])
+	copy(s.k[:], out[:32])
+	s.c = s.cs.Cipher(s.k)
+}
+
 type symmetricState struct {
 	CipherState
-	hasK   bool
-	ck     []byte
-	h      []byte
+	hasK bool
+	ck   []byte
+	h    []byte
 
 	prevCK []byte
 	prevH  []byte
@@ -199,7 +208,7 @@ type HandshakeState struct {
 	e               DHKey  // local ephemeral keypair
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
-	psk		[]byte // preshared key, maybe zero length
+	psk             []byte // preshared key, maybe zero length
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	msgIdx          int
@@ -277,10 +286,10 @@ func NewHandshakeState(c Config) *HandshakeState {
 		}
 		pskModifier = fmt.Sprintf("psk%d", c.PresharedKeyPlacement)
 		hs.messagePatterns = append([][]MessagePattern(nil), hs.messagePatterns...)
-		if (c.PresharedKeyPlacement == 0) {
+		if c.PresharedKeyPlacement == 0 {
 			hs.messagePatterns[0] = append([]MessagePattern{MessagePatternPSK}, hs.messagePatterns[0]...)
 		} else {
-			hs.messagePatterns[c.PresharedKeyPlacement - 1] = append(hs.messagePatterns[c.PresharedKeyPlacement - 1], MessagePatternPSK)
+			hs.messagePatterns[c.PresharedKeyPlacement-1] = append(hs.messagePatterns[c.PresharedKeyPlacement-1], MessagePatternPSK)
 		}
 	}
 	hs.ss.InitializeSymmetric([]byte("Noise_" + c.Pattern.Name + pskModifier + "_" + string(hs.ss.cs.Name())))
