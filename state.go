@@ -194,6 +194,9 @@ const (
 	MessagePatternDHSE
 	MessagePatternDHSS
 	MessagePatternPSK
+
+	MessagePatternF
+	MessagePatternFF
 )
 
 // DefaultMaxMsgLen is the default maximum number of bytes that can be sent in
@@ -206,8 +209,10 @@ type HandshakeState struct {
 	ss              symmetricState
 	s               DHKey  // local static keypair
 	e               DHKey  // local ephemeral keypair
+	f               HFSKey // local HFS keypair
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
+	rf              []byte // remote party's HFS public key
 	psk             []byte // preshared key, maybe zero length
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
@@ -305,6 +310,8 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 	}
 	hs.ss.InitializeSymmetric([]byte("Noise_" + c.Pattern.Name + pskModifier + "_" + string(hs.ss.cs.Name())))
 	hs.ss.MixHash(c.Prologue)
+	// TODO: Technically r/rf can be part of the pre-message state, but we
+	// don't use it, so punt on supporting it.
 	for _, m := range c.Pattern.InitiatorPreMessages {
 		switch {
 		case c.Initiator && m == MessagePatternS:
@@ -385,6 +392,11 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternF:
+			s.f = s.ss.cs.GenerateKeypairF(s.rng, s.rf)
+			out = s.ss.EncryptAndHash(out, s.f.Public())
+		case MessagePatternFF:
+			s.ss.MixKey(s.ss.cs.FF(s.f, s.rf))
 		}
 	}
 	s.shouldWrite = false
@@ -468,6 +480,25 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternF:
+			expected := s.ss.cs.FLen1()
+			if s.f != nil {
+				expected = s.ss.cs.FLen2()
+			}
+			if s.ss.hasK {
+				expected += 16
+			}
+			if len(message) < expected {
+				return nil, nil, nil, ErrShortMessage
+			}
+			s.rf, err = s.ss.DecryptAndHash(nil, message[:expected])
+			if err != nil {
+				s.ss.Rollback()
+				return nil, nil, nil, err
+			}
+			message = message[expected:]
+		case MessagePatternFF:
+			s.ss.MixKey(s.ss.cs.FF(s.f, s.rf))
 		}
 	}
 	out, err = s.ss.DecryptAndHash(out, message)
