@@ -29,7 +29,6 @@ func main() {
 				HandshakeN,
 				HandshakeK,
 				HandshakeX,
-				HandshakeXR,
 			} {
 				for _, prologue := range []bool{false, true} {
 					for _, payloads := range []bool{false, true} {
@@ -79,12 +78,12 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 	ephR := cs.GenerateKeypair(hexReader(key2))
 
 	configI := Config{
-		CipherSuite:  cs,
-		Random:       hexReader(key3),
-		Pattern:      h,
-		Initiator:    true,
-		Prologue:     prologue,
-		PresharedKey: psk,
+		CipherSuite:           cs,
+		Random:                hexReader(key3),
+		Pattern:               h,
+		Initiator:             true,
+		Prologue:              prologue,
+		PresharedKey:          psk,
 		PresharedKeyPlacement: pskPlacement,
 	}
 	configR := configI
