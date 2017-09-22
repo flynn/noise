@@ -136,11 +136,9 @@ func (s *symmetricState) DecryptAndHash(out, data []byte) ([]byte, error) {
 		return append(out, data...), nil
 	}
 	plaintext, err := s.Decrypt(out, s.h, data)
-
 	if err != nil {
 		return nil, err
 	}
-
 	s.MixHash(data)
 	return plaintext, nil
 }
