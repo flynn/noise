@@ -56,7 +56,6 @@ func init() {
 		HandshakeXK,
 		HandshakeIK,
 		HandshakeXX,
-		HandshakeXR,
 		HandshakeIX,
 		HandshakeN,
 		HandshakeK,
