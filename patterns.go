@@ -13,7 +13,7 @@ var HandshakeKN = HandshakePattern{
 	InitiatorPreMessages: []MessagePattern{MessagePatternS},
 	Messages: [][]MessagePattern{
 		{MessagePatternE},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE},
 	},
 }
 
@@ -32,7 +32,7 @@ var HandshakeKK = HandshakePattern{
 	ResponderPreMessages: []MessagePattern{MessagePatternS},
 	Messages: [][]MessagePattern{
 		{MessagePatternE, MessagePatternDHES, MessagePatternDHSS},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE},
 	},
 }
 
@@ -40,7 +40,7 @@ var HandshakeNX = HandshakePattern{
 	Name: "NX",
 	Messages: [][]MessagePattern{
 		{MessagePatternE},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternS, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternS, MessagePatternDHES},
 	},
 }
 
@@ -49,7 +49,7 @@ var HandshakeKX = HandshakePattern{
 	InitiatorPreMessages: []MessagePattern{MessagePatternS},
 	Messages: [][]MessagePattern{
 		{MessagePatternE},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES, MessagePatternS, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE, MessagePatternS, MessagePatternDHES},
 	},
 }
 
@@ -66,7 +66,7 @@ var HandshakeIN = HandshakePattern{
 	Name: "IN",
 	Messages: [][]MessagePattern{
 		{MessagePatternE, MessagePatternS},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE},
 	},
 }
 
@@ -85,7 +85,7 @@ var HandshakeIK = HandshakePattern{
 	ResponderPreMessages: []MessagePattern{MessagePatternS},
 	Messages: [][]MessagePattern{
 		{MessagePatternE, MessagePatternDHES, MessagePatternS, MessagePatternDHSS},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE},
 	},
 }
 
@@ -93,17 +93,7 @@ var HandshakeXX = HandshakePattern{
 	Name: "XX",
 	Messages: [][]MessagePattern{
 		{MessagePatternE},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternS, MessagePatternDHSE},
-		{MessagePatternS, MessagePatternDHSE},
-	},
-}
-
-var HandshakeXR = HandshakePattern{
-	Name: "XR",
-	Messages: [][]MessagePattern{
-		{MessagePatternE},
-		{MessagePatternE, MessagePatternDHEE},
-		{MessagePatternS, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternS, MessagePatternDHES},
 		{MessagePatternS, MessagePatternDHSE},
 	},
 }
@@ -112,7 +102,7 @@ var HandshakeIX = HandshakePattern{
 	Name: "IX",
 	Messages: [][]MessagePattern{
 		{MessagePatternE, MessagePatternS},
-		{MessagePatternE, MessagePatternDHEE, MessagePatternDHES, MessagePatternS, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternDHSE, MessagePatternS, MessagePatternDHES},
 	},
 }
 

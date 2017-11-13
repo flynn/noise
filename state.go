@@ -216,6 +216,7 @@ type HandshakeState struct {
 	psk             []byte // preshared key, maybe zero length
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
+	initiator       bool
 	msgIdx          int
 	rng             io.Reader
 	maxMsgLen       int
@@ -279,6 +280,7 @@ func NewHandshakeState(c Config) *HandshakeState {
 		psk:             c.PresharedKey,
 		messagePatterns: c.Pattern.Messages,
 		shouldWrite:     c.Initiator,
+		initiator:       c.Initiator,
 		rng:             c.Random,
 		maxMsgLen:       c.MaxMsgLen,
 	}
@@ -371,9 +373,17 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
-			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			if s.initiator {
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			} else {
+				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			}
 		case MessagePatternDHSE:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			if s.initiator {
+				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			} else {
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			}
 		case MessagePatternDHSS:
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
@@ -451,9 +461,17 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 		case MessagePatternDHEE:
 			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
 		case MessagePatternDHES:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			if s.initiator {
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			} else {
+				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			}
 		case MessagePatternDHSE:
-			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			if s.initiator {
+				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+			} else {
+				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+			}
 		case MessagePatternDHSS:
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
