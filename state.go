@@ -194,11 +194,14 @@ const (
 	MessagePatternDHSE
 	MessagePatternDHSS
 	MessagePatternPSK
+
+	MessagePatternF
+	MessagePatternFF
 )
 
-// MaxMsgLen is the maximum number of bytes that can be sent in a single Noise
-// message.
-const MaxMsgLen = 65535
+// DefaultMaxMsgLen is the default maximum number of bytes that can be sent in
+// a single Noise message.
+const DefaultMaxMsgLen = 65535
 
 // A HandshakeState tracks the state of a Noise handshake. It may be discarded
 // after the handshake is complete.
@@ -206,14 +209,17 @@ type HandshakeState struct {
 	ss              symmetricState
 	s               DHKey  // local static keypair
 	e               DHKey  // local ephemeral keypair
+	f               HFSKey // local HFS keypair
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
+	rf              []byte // remote party's HFS public key
 	psk             []byte // preshared key, maybe zero length
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	initiator       bool
 	msgIdx          int
 	rng             io.Reader
+	maxMsgLen       int
 }
 
 // A Config provides the details necessary to process a Noise handshake. It is
@@ -259,6 +265,10 @@ type Config struct {
 	// PeerEphemeral is the ephemeral public key of the remote peer that was
 	// provided as a pre-message in the handshake.
 	PeerEphemeral []byte
+
+	// MaxMsgLen is the maximum number of bytes that can be sent in a single
+	// Noise message.
+	MaxMsgLen int
 }
 
 // NewHandshakeState starts a new handshake using the provided configuration.
@@ -272,6 +282,7 @@ func NewHandshakeState(c Config) *HandshakeState {
 		shouldWrite:     c.Initiator,
 		initiator:       c.Initiator,
 		rng:             c.Random,
+		maxMsgLen:       c.MaxMsgLen,
 	}
 	if hs.rng == nil {
 		hs.rng = rand.Reader
@@ -279,6 +290,9 @@ func NewHandshakeState(c Config) *HandshakeState {
 	if len(c.PeerEphemeral) > 0 {
 		hs.re = make([]byte, len(c.PeerEphemeral))
 		copy(hs.re, c.PeerEphemeral)
+	}
+	if c.MaxMsgLen <= 0 {
+		hs.maxMsgLen = DefaultMaxMsgLen
 	}
 	hs.ss.cs = c.CipherSuite
 	pskModifier := ""
@@ -296,6 +310,8 @@ func NewHandshakeState(c Config) *HandshakeState {
 	}
 	hs.ss.InitializeSymmetric([]byte("Noise_" + c.Pattern.Name + pskModifier + "_" + string(hs.ss.cs.Name())))
 	hs.ss.MixHash(c.Prologue)
+	// TODO: Technically r/rf can be part of the pre-message state, but we
+	// don't use it, so punt on supporting it.
 	for _, m := range c.Pattern.InitiatorPreMessages {
 		switch {
 		case c.Initiator && m == MessagePatternS:
@@ -336,7 +352,7 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 	if s.msgIdx > len(s.messagePatterns)-1 {
 		panic("noise: no handshake messages left")
 	}
-	if len(payload) > MaxMsgLen {
+	if len(payload) > s.maxMsgLen {
 		panic("noise: message is too long")
 	}
 
@@ -372,6 +388,11 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternF:
+			s.f = s.ss.cs.GenerateKeypairF(s.rng, s.rf)
+			out = s.ss.EncryptAndHash(out, s.f.Public())
+		case MessagePatternFF:
+			s.ss.MixKey(s.ss.cs.FF(s.f, s.rf))
 		}
 	}
 	s.shouldWrite = false
@@ -455,6 +476,25 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternF:
+			expected := s.ss.cs.FLen1()
+			if s.f != nil {
+				expected = s.ss.cs.FLen2()
+			}
+			if s.ss.hasK {
+				expected += 16
+			}
+			if len(message) < expected {
+				return nil, nil, nil, ErrShortMessage
+			}
+			s.rf, err = s.ss.DecryptAndHash(nil, message[:expected])
+			if err != nil {
+				s.ss.Rollback()
+				return nil, nil, nil, err
+			}
+			message = message[expected:]
+		case MessagePatternFF:
+			s.ss.MixKey(s.ss.cs.FF(s.f, s.rf))
 		}
 	}
 	out, err = s.ss.DecryptAndHash(out, message)
