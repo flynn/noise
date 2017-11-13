@@ -135,7 +135,7 @@ var HandshakeXXhfs = HandshakePattern{
 	Name: "XXhfs",
 	Messages: [][]MessagePattern{
 		{MessagePatternE, MessagePatternF},
-		{MessagePatternE, MessagePatternF, MessagePatternDHEE, MessagePatternFF, MessagePatternS, MessagePatternDHSE},
+		{MessagePatternE, MessagePatternF, MessagePatternDHEE, MessagePatternFF, MessagePatternS, MessagePatternDHES},
 		{MessagePatternS, MessagePatternDHSE},
 	},
 }
