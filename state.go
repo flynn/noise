@@ -3,7 +3,7 @@
 // Noise is a low-level framework for building crypto protocols. Noise protocols
 // support mutual and optional authentication, identity hiding, forward secrecy,
 // zero round-trip encryption, and other advanced features. For more details,
-// visit http://noiseprotocol.org.
+// visit https://noiseprotocol.org.
 package noise
 
 import (
