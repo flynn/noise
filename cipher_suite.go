@@ -26,7 +26,7 @@ type DHKey struct {
 type DHFunc interface {
 	// GenerateKeypair generates a new keypair using random as a source of
 	// entropy.
-	GenerateKeypair(random io.Reader) DHKey
+	GenerateKeypair(random io.Reader) (DHKey, error)
 
 	// DH performs a Diffie-Hellman calculation between the provided private and
 	// public keys and returns the result.
@@ -104,16 +104,16 @@ var DH25519 DHFunc = dh25519{}
 
 type dh25519 struct{}
 
-func (dh25519) GenerateKeypair(rng io.Reader) DHKey {
+func (dh25519) GenerateKeypair(rng io.Reader) (DHKey, error) {
 	var pubkey, privkey [32]byte
 	if rng == nil {
 		rng = rand.Reader
 	}
 	if _, err := io.ReadFull(rng, privkey[:]); err != nil {
-		panic(err)
+		return DHKey{}, err
 	}
 	curve25519.ScalarBaseMult(&pubkey, &privkey)
-	return DHKey{Private: privkey[:], Public: pubkey[:]}
+	return DHKey{Private: privkey[:], Public: pubkey[:]}, nil
 }
 
 func (dh25519) DH(privkey, pubkey []byte) []byte {
@@ -141,11 +141,11 @@ var CipherAESGCM CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
 func cipherAESGCM(k [32]byte) Cipher {
 	c, err := aes.NewCipher(k[:])
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	gcm, err := cipher.NewGCM(c)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return aeadCipher{
 		gcm,
@@ -163,7 +163,7 @@ var CipherChaChaPoly CipherFunc = cipherFn{cipherChaChaPoly, "ChaChaPoly"}
 func cipherChaChaPoly(k [32]byte) Cipher {
 	c, err := chacha20poly1305.New(k[:])
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return aeadCipher{
 		c,
@@ -205,7 +205,7 @@ var HashSHA512 HashFunc = hashFn{sha512.New, "SHA512"}
 func blake2bNew() hash.Hash {
 	h, err := blake2b.New512(nil)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return h
 }
@@ -216,7 +216,7 @@ var HashBLAKE2b HashFunc = hashFn{blake2bNew, "BLAKE2b"}
 func blake2sNew() hash.Hash {
 	h, err := blake2s.New256(nil)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return h
 }

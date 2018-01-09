@@ -262,7 +262,7 @@ type Config struct {
 }
 
 // NewHandshakeState starts a new handshake using the provided configuration.
-func NewHandshakeState(c Config) *HandshakeState {
+func NewHandshakeState(c Config) (*HandshakeState, error) {
 	hs := &HandshakeState{
 		s:               c.StaticKeypair,
 		e:               c.EphemeralKeypair,
@@ -284,7 +284,7 @@ func NewHandshakeState(c Config) *HandshakeState {
 	pskModifier := ""
 	if len(hs.psk) > 0 {
 		if len(hs.psk) != 32 {
-			panic("noise: specification mandates 256-bit preshared keys")
+			return nil, errors.New("noise: specification mandates 256-bit preshared keys")
 		}
 		pskModifier = fmt.Sprintf("psk%d", c.PresharedKeyPlacement)
 		hs.messagePatterns = append([][]MessagePattern(nil), hs.messagePatterns...)
@@ -320,7 +320,7 @@ func NewHandshakeState(c Config) *HandshakeState {
 			hs.ss.MixHash(hs.re)
 		}
 	}
-	return hs
+	return hs, nil
 }
 
 // WriteMessage appends a handshake message to out. The message will include the
@@ -329,21 +329,25 @@ func NewHandshakeState(c Config) *HandshakeState {
 // remote peer, the other is used for decryption of messages from the remote
 // peer. It is an error to call this method out of sync with the handshake
 // pattern.
-func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState, *CipherState) {
+func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState, *CipherState, error) {
 	if !s.shouldWrite {
-		panic("noise: unexpected call to WriteMessage should be ReadMessage")
+		return nil, nil, nil, errors.New("noise: unexpected call to WriteMessage should be ReadMessage")
 	}
 	if s.msgIdx > len(s.messagePatterns)-1 {
-		panic("noise: no handshake messages left")
+		return nil, nil, nil, errors.New("noise: no handshake messages left")
 	}
 	if len(payload) > MaxMsgLen {
-		panic("noise: message is too long")
+		return nil, nil, nil, errors.New("noise: message is too long")
 	}
 
 	for _, msg := range s.messagePatterns[s.msgIdx] {
 		switch msg {
 		case MessagePatternE:
-			s.e = s.ss.cs.GenerateKeypair(s.rng)
+			e, err := s.ss.cs.GenerateKeypair(s.rng)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.e = e
 			out = append(out, s.e.Public...)
 			s.ss.MixHash(s.e.Public)
 			if len(s.psk) > 0 {
@@ -351,7 +355,7 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			}
 		case MessagePatternS:
 			if len(s.s.Public) == 0 {
-				panic("noise: invalid state, s.Public is nil")
+				return nil, nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
 			out = s.ss.EncryptAndHash(out, s.s.Public)
 		case MessagePatternDHEE:
@@ -380,10 +384,10 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 
 	if s.msgIdx >= len(s.messagePatterns) {
 		cs1, cs2 := s.ss.Split()
-		return out, cs1, cs2
+		return out, cs1, cs2, nil
 	}
 
-	return out, nil, nil
+	return out, nil, nil, nil
 }
 
 // ErrShortMessage is returned by ReadMessage if a message is not as long as it should be.
@@ -396,10 +400,10 @@ var ErrShortMessage = errors.New("noise: message is too short")
 // error to call this method out of sync with the handshake pattern.
 func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState, *CipherState, error) {
 	if s.shouldWrite {
-		panic("noise: unexpected call to ReadMessage should be WriteMessage")
+		return nil, nil, nil, errors.New("noise: unexpected call to ReadMessage should be WriteMessage")
 	}
 	if s.msgIdx > len(s.messagePatterns)-1 {
-		panic("noise: no handshake messages left")
+		return nil, nil, nil, errors.New("noise: no handshake messages left")
 	}
 
 	s.ss.Checkpoint()
@@ -428,7 +432,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 				}
 			case MessagePatternS:
 				if len(s.rs) > 0 {
-					panic("noise: invalid state, rs is not nil")
+					return nil, nil, nil, errors.New("noise: invalid state, rs is not nil")
 				}
 				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], message[:expected])
 			}
