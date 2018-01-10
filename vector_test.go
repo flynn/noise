@@ -127,11 +127,11 @@ func (NoiseSuite) TestVectors(c *C) {
 
 		switch string(splitLine[0]) {
 		case "init_static":
-			staticI = DH25519.GenerateKeypair(hexReader(splitLine[1]))
+			staticI, _ = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "resp_static":
-			staticR = DH25519.GenerateKeypair(hexReader(splitLine[1]))
+			staticR, _ = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "resp_ephemeral":
-			ephR = DH25519.GenerateKeypair(hexReader(splitLine[1]))
+			ephR, _ = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "handshake":
 			name = string(splitLine[1])
 			c.Log(name)
@@ -188,7 +188,8 @@ func (NoiseSuite) TestVectors(c *C) {
 				configI.PresharedKey = psk
 				configR.PresharedKey = psk
 			}
-			hsI, hsR = NewHandshakeState(configI), NewHandshakeState(configR)
+			hsI, _ = NewHandshakeState(configI)
+			hsR, _ = NewHandshakeState(configR)
 		}
 
 		i, _ := strconv.Atoi(string(splitLine[0][4:5]))
@@ -213,7 +214,7 @@ func (NoiseSuite) TestVectors(c *C) {
 		}
 
 		var msg, res []byte
-		msg, csW0, csW1 = writer.WriteMessage(nil, payload)
+		msg, csW0, csW1, _ = writer.WriteMessage(nil, payload)
 		c.Assert(fmt.Sprintf("%x", msg), Equals, string(splitLine[1]))
 		res, csR0, csR1, err = reader.ReadMessage(nil, msg)
 		c.Assert(err, IsNil)

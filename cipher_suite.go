@@ -26,7 +26,7 @@ type DHKey struct {
 type DHFunc interface {
 	// GenerateKeypair generates a new keypair using random as a source of
 	// entropy.
-	GenerateKeypair(random io.Reader) DHKey
+	GenerateKeypair(random io.Reader) (DHKey, error)
 
 	// DH performs a Diffie-Hellman calculation between the provided private and
 	// public keys and returns the result.
@@ -104,16 +104,16 @@ var DH25519 DHFunc = dh25519{}
 
 type dh25519 struct{}
 
-func (dh25519) GenerateKeypair(rng io.Reader) DHKey {
+func (dh25519) GenerateKeypair(rng io.Reader) (DHKey, error) {
 	var pubkey, privkey [32]byte
 	if rng == nil {
 		rng = rand.Reader
 	}
 	if _, err := io.ReadFull(rng, privkey[:]); err != nil {
-		panic(err)
+		return DHKey{}, err
 	}
 	curve25519.ScalarBaseMult(&pubkey, &privkey)
-	return DHKey{Private: privkey[:], Public: pubkey[:]}
+	return DHKey{Private: privkey[:], Public: pubkey[:]}, nil
 }
 
 func (dh25519) DH(privkey, pubkey []byte) []byte {

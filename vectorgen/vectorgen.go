@@ -73,9 +73,9 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 		psk = []byte("!verysecretverysecretverysecret!")
 	}
 
-	staticI := cs.GenerateKeypair(hexReader(key0))
-	staticR := cs.GenerateKeypair(hexReader(key1))
-	ephR := cs.GenerateKeypair(hexReader(key2))
+	staticI, _ := cs.GenerateKeypair(hexReader(key0))
+	staticR, _ := cs.GenerateKeypair(hexReader(key1))
+	ephR, _ := cs.GenerateKeypair(hexReader(key2))
 
 	configI := Config{
 		CipherSuite:           cs,
@@ -151,8 +151,8 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 		fmt.Fprintf(out, "preshared_key=%x\n", psk)
 	}
 
-	hsI := NewHandshakeState(configI)
-	hsR := NewHandshakeState(configR)
+	hsI, _ := NewHandshakeState(configI)
+	hsR, _ := NewHandshakeState(configR)
 
 	var cs0, cs1 *CipherState
 	for i := range h.Messages {
@@ -166,7 +166,7 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 			payload = fmt.Sprintf("test_msg_%d", i)
 		}
 		var msg []byte
-		msg, cs0, cs1 = writer.WriteMessage(nil, []byte(payload))
+		msg, cs0, cs1, _ = writer.WriteMessage(nil, []byte(payload))
 		_, _, _, err := reader.ReadMessage(nil, msg)
 		if err != nil {
 			panic(err)
