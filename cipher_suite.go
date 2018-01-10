@@ -141,11 +141,11 @@ var CipherAESGCM CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
 func cipherAESGCM(k [32]byte) Cipher {
 	c, err := aes.NewCipher(k[:])
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	gcm, err := cipher.NewGCM(c)
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	return aeadCipher{
 		gcm,
@@ -163,7 +163,7 @@ var CipherChaChaPoly CipherFunc = cipherFn{cipherChaChaPoly, "ChaChaPoly"}
 func cipherChaChaPoly(k [32]byte) Cipher {
 	c, err := chacha20poly1305.New(k[:])
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	return aeadCipher{
 		c,
@@ -205,7 +205,7 @@ var HashSHA512 HashFunc = hashFn{sha512.New, "SHA512"}
 func blake2bNew() hash.Hash {
 	h, err := blake2b.New512(nil)
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	return h
 }
@@ -216,7 +216,7 @@ var HashBLAKE2b HashFunc = hashFn{blake2bNew, "BLAKE2b"}
 func blake2sNew() hash.Hash {
 	h, err := blake2s.New256(nil)
 	if err != nil {
-		return nil
+		panic(err)
 	}
 	return h
 }
