@@ -166,7 +166,7 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 			payload = fmt.Sprintf("test_msg_%d", i)
 		}
 		var msg []byte
-		msg, cs0, cs1 = writer.WriteMessage(nil, []byte(payload))
+		msg, cs0, cs1, _ = writer.WriteMessage(nil, []byte(payload))
 		_, _, _, err := reader.ReadMessage(nil, msg)
 		if err != nil {
 			panic(err)
