@@ -25,6 +25,23 @@ type CipherState struct {
 	invalid bool
 }
 
+// GetNonce is a nonce getter useful for out-of-order protocols where
+// the nonce must be explicitly sent in addition to encrypted application data.
+// It is to be used in conjunction with SetNonce(). More information is available
+// in Section 11.4 (Out-of-order transport messages) of the Noise framework protocol.
+func (s CipherState) GetNonce() uint64 {
+	return s.n
+}
+
+// SetNonce is a helper for handling of out-of-order transport messages.
+// When receiving an explicit nonce from an encrypted message, SetNonce
+// can be used to set the decryption nonce to the received one. More information
+// is available in Section 11.4 (Out-of-order transport messages) of the
+// Noise framework protocol.
+func (s *CipherState) SetNonce(nonce uint64) {
+	s.n = nonce
+}
+
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
 // authentication tag across the ciphertext and optional authenticated data to
 // out. This method automatically increments the nonce after every call, so
