@@ -490,3 +490,8 @@ func (s *HandshakeState) ChannelBinding() []byte {
 func (s *HandshakeState) PeerStatic() []byte {
 	return s.rs
 }
+
+// MessageIndex returns the current handshake message id
+func (s *HandshakeState) MessageIndex() int {
+	return s.msgIdx
+}
