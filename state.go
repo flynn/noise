@@ -21,8 +21,23 @@ type CipherState struct {
 	c  Cipher
 	k  [32]byte
 	n  uint64
+}
 
-	invalid bool
+// GetNonce is a nonce getter useful for out-of-order protocols where
+// the nonce must be explicitly sent in addition to encrypted application data.
+// It is to be used in conjunction with SetNonce(). More information is available
+// in Section 11.4 (Out-of-order transport messages) of the Noise framework protocol.
+func (s CipherState) GetNonce() uint64 {
+	return s.n
+}
+
+// SetNonce is a helper for handling of out-of-order transport messages.
+// When receiving an explicit nonce from an encrypted message, SetNonce
+// can be used to set the decryption nonce to the received one. More information
+// is available in Section 11.4 (Out-of-order transport messages) of the
+// Noise framework protocol.
+func (s *CipherState) SetNonce(nonce uint64) {
+	s.n = nonce
 }
 
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
@@ -30,9 +45,6 @@ type CipherState struct {
 // out. This method automatically increments the nonce after every call, so
 // messages must be decrypted in the same order.
 func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
-	if s.invalid {
-		panic("noise: CipherSuite has been copied, state is invalid")
-	}
 	out = s.c.Encrypt(out, s.n, ad, plaintext)
 	s.n++
 	return out
@@ -43,23 +55,9 @@ func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
 // increments the nonce after every call, messages must be provided in the same
 // order that they were encrypted with no missing messages.
 func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
-	if s.invalid {
-		panic("noise: CipherSuite has been copied, state is invalid")
-	}
 	out, err := s.c.Decrypt(out, s.n, ad, ciphertext)
 	s.n++
 	return out, err
-}
-
-// Cipher returns the low-level symmetric encryption primitive. It should only
-// be used if nonces need to be managed manually, for example with a network
-// protocol that can deliver out-of-order messages. This is dangerous, users
-// must ensure that they are incrementing a nonce after every encrypt operation.
-// After calling this method, it is an error to call Encrypt/Decrypt on the
-// CipherState.
-func (s *CipherState) Cipher() Cipher {
-	s.invalid = true
-	return s.c
 }
 
 func (s *CipherState) Rekey() {
