@@ -495,3 +495,16 @@ func (s *HandshakeState) PeerStatic() []byte {
 func (s *HandshakeState) MessageIndex() int {
 	return s.msgIdx
 }
+
+// PeerEphemeral returns the ephemeral key provided by the remote peer during
+// a handshake. It is an error to call this method if a handshake message
+// containing a static key has not been read.
+func (s *HandshakeState) PeerEphemeral() []byte {
+	return s.re
+}
+
+// LocalEphemeral returns the local ephemeral key pair generated during
+// a handshake.
+func (s *HandshakeState) LocalEphemeral() DHKey {
+	return s.e
+}
