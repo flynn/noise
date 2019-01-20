@@ -539,3 +539,47 @@ func (NoiseSuite) TestRekey(c *C) {
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(string(serverMessage), Not(Equals), string(res))
 }
+
+func (NoiseSuite) TestRestoreState(c *C) {
+	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA512)
+	rngI := new(RandomInc)
+	rngR := new(RandomInc)
+	*rngR = 1
+
+	hsI, _ := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngI,
+		Pattern:     HandshakeNN,
+		Initiator:   true,
+	})
+	hsR, _ := NewHandshakeState(Config{
+		CipherSuite: cs,
+		Random:      rngR,
+		Pattern:     HandshakeNN,
+		Initiator:   false,
+	})
+
+	msg, _, _, _ := hsI.WriteMessage(nil, []byte("abc"))
+	c.Assert(msg, HasLen, 35)
+	res, _, _, err := hsR.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "abc")
+
+	msg, decR, _, _ := hsR.WriteMessage(nil, []byte("defg"))
+	c.Assert(msg, HasLen, 52)
+	c.Assert(decR, NotNil)
+	res, encI, _, err := hsI.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(encI, NotNil)
+	c.Assert(string(res), Equals, "defg")
+
+	newEncI := &CipherState{cs: cs}
+	newEncI.InitializeKey(encI.CipherKey())
+	encrypted := newEncI.Encrypt(nil, nil, []byte("foo"))
+
+	newDecR := &CipherState{cs: cs}
+	newDecR.InitializeKey(decR.CipherKey())
+	decrypted, err := newDecR.Decrypt(nil, nil, encrypted)
+	c.Assert(err, IsNil)
+	c.Assert(string(decrypted), Equals, "foo")
+}

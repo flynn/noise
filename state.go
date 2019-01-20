@@ -25,6 +25,23 @@ type CipherState struct {
 	invalid bool
 }
 
+// CipherKey returns current cipher key.
+func (s *CipherState) CipherKey() [32]byte {
+	return s.k
+}
+
+// InitializeKey assigns cipher key to a provided value.
+func (s *CipherState) InitializeKey(k [32]byte) {
+	s.k = k
+	s.n = 0
+	s.c = s.cs.Cipher(k)
+}
+
+// SetNonce assigns nonce to a provided value.
+func (s *CipherState) SetNonce(n uint64) {
+	s.n = n
+}
+
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
 // authentication tag across the ciphertext and optional authenticated data to
 // out. This method automatically increments the nonce after every call, so
