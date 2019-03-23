@@ -1,0 +1,11 @@
+image: "golang:1.11"
+
+before_script:
+  - mkdir -p /go/src/github.com
+  - cp -r /builds/katzenpost /go/src/github.com/katzenpost/
+  - cd /go/src/github.com/katzenpost/noise
+  - go get -v -t ./...
+
+test-noise:
+  script:
+    - go test -v -cover -race ./...
