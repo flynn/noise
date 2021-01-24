@@ -1,4 +1,3 @@
-github.com/cloudflare/circl v1.0.0 h1:64b6pyfCFbYm623ncIkYGNZaOcmIbyd+CjyMi2L9vdI=
 github.com/cloudflare/circl v1.0.1-0.20210104183656-96a0695de3c3 h1:tpTW2GMi0DOdFJswbXNG6f45rOAgowhgPdofAWDKLwI=
 github.com/cloudflare/circl v1.0.1-0.20210104183656-96a0695de3c3/go.mod h1:l2CvGr3DNS9Egif8pwQqJ45Ci9Y/PPs0XJHTcRKbGBQ=
 github.com/flynn/noise v0.0.0-20180327030543-2492fe189ae6 h1:u/UEqS66A5ckRmS4yNpjmVH56sVtS/RfclBAYocb4as=

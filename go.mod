@@ -1,4 +1,4 @@
-module github.com/katzenpost/noise
+module github.com/flynn/noise
 
 go 1.13
 
