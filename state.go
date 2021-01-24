@@ -194,6 +194,8 @@ const (
 	MessagePatternDHSE
 	MessagePatternDHSS
 	MessagePatternPSK
+	MessagePatternE1
+	MessagePatternEKEM1
 )
 
 // MaxMsgLen is the maximum number of bytes that can be sent in a single Noise
@@ -204,11 +206,13 @@ const MaxMsgLen = 65535
 // after the handshake is complete.
 type HandshakeState struct {
 	ss              symmetricState
-	s               DHKey  // local static keypair
-	e               DHKey  // local ephemeral keypair
-	rs              []byte // remote party's static public key
-	re              []byte // remote party's ephemeral public key
-	psk             []byte // preshared key, maybe zero length
+	s               DHKey      // local static keypair
+	e               DHKey      // local ephemeral keypair
+	hfsKeyPair      HFSKeyPair // local HFS keypair
+	rs              []byte     // remote party's static public key
+	re              []byte     // remote party's ephemeral public key
+	rHFSPubKey      []byte     // remote party's HFS public key
+	psk             []byte     // preshared key, maybe zero length
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	initiator       bool
@@ -376,6 +380,13 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternE1:
+			s.hfsKeyPair = s.ss.cs.GenerateKEMKeypair(s.rng)
+			out = s.ss.EncryptAndHash(out, s.hfsKeyPair.Public())
+		case MessagePatternEKEM1:
+			ciphertext, sharedSecret := s.ss.cs.GenerateKEMCiphertext(s.rHFSPubKey, s.rng)
+			out = s.ss.EncryptAndHash(out, ciphertext)
+			s.ss.MixKey(sharedSecret)
 		}
 	}
 	s.shouldWrite = false
@@ -459,6 +470,35 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
+		case MessagePatternE1:
+			expected := s.ss.cs.PublicKeySize()
+			if s.ss.hasK {
+				expected += 16
+			}
+			if len(message) < expected {
+				return nil, nil, nil, ErrShortMessage
+			}
+			s.rHFSPubKey, err = s.ss.DecryptAndHash(nil, message[:expected])
+			if err != nil {
+				s.ss.Rollback()
+				return nil, nil, nil, err
+			}
+			message = message[expected:]
+		case MessagePatternEKEM1:
+			expected := s.ss.cs.CiphertextSize()
+			if s.ss.hasK {
+				expected += 16
+			}
+			if len(message) < expected {
+				return nil, nil, nil, ErrShortMessage
+			}
+			kemCiphertext, err := s.ss.DecryptAndHash(nil, message[:expected])
+			if err != nil {
+				s.ss.Rollback()
+				return nil, nil, nil, err
+			}
+			s.ss.MixKey(s.ss.cs.KEM(s.hfsKeyPair, kemCiphertext))
+			message = message[expected:]
 		}
 	}
 	out, err = s.ss.DecryptAndHash(out, message)
