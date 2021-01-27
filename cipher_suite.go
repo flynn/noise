@@ -76,6 +76,7 @@ type CipherSuite interface {
 	DHFunc
 	CipherFunc
 	HashFunc
+	HFSFunc
 	Name() []byte
 }
 
@@ -86,7 +87,20 @@ func NewCipherSuite(dh DHFunc, c CipherFunc, h HashFunc) CipherSuite {
 		DHFunc:     dh,
 		CipherFunc: c,
 		HashFunc:   h,
+		HFSFunc:    hfsNull,
 		name:       []byte(dh.DHName() + "_" + c.CipherName() + "_" + h.HashName()),
+	}
+}
+
+// NewCipherSuite HFS returns a CipherSuite constructed from the specified
+// primitives, with the Hybrid Forward Secrecy extension.
+func NewCipherSuiteHFS(dh DHFunc, c CipherFunc, h HashFunc, hfs HFSFunc) CipherSuite {
+	return ciphersuite{
+		DHFunc:     dh,
+		CipherFunc: c,
+		HashFunc:   h,
+		HFSFunc:    hfs,
+		name:       []byte(dh.DHName() + "+" + hfs.HFSName() + "_" + c.CipherName() + "_" + h.HashName()),
 	}
 }
 
@@ -94,6 +108,7 @@ type ciphersuite struct {
 	DHFunc
 	CipherFunc
 	HashFunc
+	HFSFunc
 	name []byte
 }
 

@@ -245,6 +245,70 @@ func (NoiseSuite) TestXXRoundtrip(c *C) {
 	c.Assert(string(res), Equals, "worri")
 }
 
+func (NoiseSuite) TestXXhfsKyberRoundtrip(c *C) {
+	cs := NewCipherSuiteHFS(DH25519, CipherChaChaPoly, HashBLAKE2b, HFSKyber)
+	rngI := new(RandomInc)
+	rngR := new(RandomInc)
+	*rngR = 1
+
+	staticI, _ := cs.GenerateKeypair(rngI)
+	staticR, _ := cs.GenerateKeypair(rngR)
+
+	hsI, _ := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngI,
+		Pattern:       HandshakeXXhfs,
+		Initiator:     true,
+		StaticKeypair: staticI,
+	})
+	hsR, _ := NewHandshakeState(Config{
+		CipherSuite:   cs,
+		Random:        rngR,
+		Pattern:       HandshakeXXhfs,
+		StaticKeypair: staticR,
+	})
+
+	// -> e
+	msg, _, _, _ := hsI.WriteMessage(nil, []byte("abcdef"))
+	c.Assert(msg, HasLen, 1600+len([]byte("abcdef")))
+	res, _, _, err := hsR.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "abcdef")
+
+	// <- e, dhee, s, dhse
+	msg, _, _, _ = hsR.WriteMessage(nil, nil)
+	c.Assert(msg, HasLen, 1680)
+	res, _, _, err = hsI.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(res, HasLen, 0)
+
+	// -> s, dhse
+	payload := "0123456789012345678901234567890123456789012345678901234567890123456789"
+	msg, csI0, csI1, _ := hsI.WriteMessage(nil, []byte(payload))
+	c.Assert(msg, HasLen, 134)
+	res, csR0, csR1, err := hsR.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, payload)
+
+	// transport message I -> R
+	msg = csI0.Encrypt(nil, nil, []byte("wubba"))
+	res, err = csR0.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "wubba")
+
+	// transport message I -> R again
+	msg = csI0.Encrypt(nil, nil, []byte("aleph"))
+	res, err = csR0.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "aleph")
+
+	// transport message R <- I
+	msg = csR1.Encrypt(nil, nil, []byte("worri"))
+	res, err = csI1.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "worri")
+}
+
 func (NoiseSuite) Test_NNpsk0_Roundtrip(c *C) {
 	cs := NewCipherSuite(DH25519, CipherChaChaPoly, HashBLAKE2b)
 	rngI := new(RandomInc)
