@@ -54,9 +54,11 @@ type keyKyberInitiator struct {
 }
 
 func (k *keyKyberInitiator) Public() []byte {
-	var ret [kyber1024.PublicKeySize]byte
-	k.pubKey.Pack(ret[:])
-	return ret[:]
+	ret, err := k.pubKey.MarshalBinary()
+	if err != nil {
+		panic("noise/hfs: kyber1024: failure to serialize public key: " + err.Error())
+	}
+	return ret
 }
 
 func (k *keyKyberInitiator) Private() HFSDecapsulationKey {
@@ -78,12 +80,15 @@ func (h hfsKyber) GenerateKEMCiphertext(pubkey []byte, rng io.Reader) (ciphertex
 	if len(pubkey) != h.PublicKeySize() {
 		panic("noise/hfs: PublicKey is not kyber1024.PublicKeySize")
 	}
-	alicePubKey := new(kyber1024.PublicKey)
-	alicePubKey.Unpack(pubkey)
+	alicePublicKeyVal, err := kyber1024.Scheme().UnmarshalBinaryPublicKey(pubkey)
+	if err != nil {
+		panic("noise/hfs: PublicKey failed to deserialize: " + err.Error())
+	}
+	alicePubKey := alicePublicKeyVal.(*kyber1024.PublicKey)
 	ciphertext = make([]byte, kyber1024.CiphertextSize)
 	sharedSecret = make([]byte, kyber1024.SharedKeySize)
 	seed := make([]byte, kyber1024.EncapsulationSeedSize)
-	_, err := rng.Read(seed)
+	_, err = rng.Read(seed)
 	if err != nil {
 		panic(err)
 	}
@@ -92,6 +97,9 @@ func (h hfsKyber) GenerateKEMCiphertext(pubkey []byte, rng io.Reader) (ciphertex
 }
 
 func (hfsKyber) KEM(keyPair HFSKeyPair, ciphertext []byte) (sharedSecret []byte) {
+	if len(ciphertext) != kyber1024.CiphertextSize {
+		panic("noise/hfs: ciphertest is not kyber1024.CiphertextSize")
+	}
 	sharedSecret = make([]byte, kyber1024.SharedKeySize)
 	privKey := keyPair.Private()
 	privKey.DecapsulateTo(sharedSecret, ciphertext)
