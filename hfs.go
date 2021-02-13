@@ -98,7 +98,7 @@ func (h hfsKyber) GenerateKEMCiphertext(pubkey []byte, rng io.Reader) (ciphertex
 
 func (hfsKyber) KEM(keyPair HFSKeyPair, ciphertext []byte) (sharedSecret []byte) {
 	if len(ciphertext) != kyber1024.CiphertextSize {
-		panic("noise/hfs: ciphertest is not kyber1024.CiphertextSize")
+		panic("noise/hfs: ciphertext is not kyber1024.CiphertextSize")
 	}
 	sharedSecret = make([]byte, kyber1024.SharedKeySize)
 	privKey := keyPair.Private()
@@ -119,7 +119,7 @@ func (hfsKyber) SharedKeySize() int {
 }
 
 func (hfsKyber) HFSName() string {
-	return "kyber1024"
+	return "Kyber1024"
 }
 
 var hfsNull HFSFunc = hfsNullImpl{}
