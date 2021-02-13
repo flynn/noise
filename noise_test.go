@@ -268,21 +268,21 @@ func (NoiseSuite) TestXXhfsKyberRoundtrip(c *C) {
 		StaticKeypair: staticR,
 	})
 
-	// -> e
+	// -> e, e1
 	msg, _, _, _ := hsI.WriteMessage(nil, []byte("abcdef"))
 	c.Assert(msg, HasLen, 1600+len([]byte("abcdef")))
 	res, _, _, err := hsR.ReadMessage(nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "abcdef")
 
-	// <- e, dhee, s, dhse
+	// <- e, ee, ekem1, s, es
 	msg, _, _, _ = hsR.WriteMessage(nil, nil)
 	c.Assert(msg, HasLen, 1680)
 	res, _, _, err = hsI.ReadMessage(nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(res, HasLen, 0)
 
-	// -> s, dhse
+	// -> s, se
 	payload := "0123456789012345678901234567890123456789012345678901234567890123456789"
 	msg, csI0, csI1, _ := hsI.WriteMessage(nil, []byte(payload))
 	c.Assert(msg, HasLen, 134)
