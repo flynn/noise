@@ -406,6 +406,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 		return nil, nil, nil, errors.New("noise: no handshake messages left")
 	}
 
+	rsSet := false
 	s.ss.Checkpoint()
 
 	var err error
@@ -435,9 +436,13 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 					return nil, nil, nil, errors.New("noise: invalid state, rs is not nil")
 				}
 				s.rs, err = s.ss.DecryptAndHash(s.rs[:0], message[:expected])
+				rsSet = true
 			}
 			if err != nil {
 				s.ss.Rollback()
+				if rsSet {
+					s.rs = nil
+				}
 				return nil, nil, nil, err
 			}
 			message = message[expected:]
@@ -464,6 +469,9 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 	out, err = s.ss.DecryptAndHash(out, message)
 	if err != nil {
 		s.ss.Rollback()
+		if rsSet {
+			s.rs = nil
+		}
 		return nil, nil, nil, err
 	}
 	s.shouldWrite = true
