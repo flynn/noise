@@ -139,3 +139,109 @@ var HandshakeX = HandshakePattern{
 		{MessagePatternE, MessagePatternDHES, MessagePatternS, MessagePatternDHSS},
 	},
 }
+
+var HandshakeXXhfs = HandshakePattern{
+	Name: "XXhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternS, MessagePatternDHES},
+		{MessagePatternS, MessagePatternDHSE},
+	},
+}
+
+var HandshakeNNhfs = HandshakePattern{
+	Name: "NNhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1},
+	},
+}
+
+var HandshakeKNhfs = HandshakePattern{
+	Name:                 "KNhfs",
+	InitiatorPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE},
+	},
+}
+
+var HandshakeNKhfs = HandshakePattern{
+	Name:                 "NKhfs",
+	ResponderPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1},
+	},
+}
+
+var HandshakeKKhfs = HandshakePattern{
+	Name:                 "KKhfs",
+	InitiatorPreMessages: []MessagePattern{MessagePatternS},
+	ResponderPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternDHES, MessagePatternDHSS},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE},
+	},
+}
+
+var HandshakeNXhfs = HandshakePattern{
+	Name: "NXhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternS, MessagePatternDHES},
+	},
+}
+
+var HandshakeKXhfs = HandshakePattern{
+	Name:                 "KXhfs",
+	InitiatorPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE, MessagePatternS, MessagePatternDHES},
+	},
+}
+
+var HandshakeXNhfs = HandshakePattern{
+	Name: "XNhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1},
+		{MessagePatternS, MessagePatternDHSE},
+	},
+}
+
+var HandshakeINhfs = HandshakePattern{
+	Name: "INhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternS},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE},
+	},
+}
+
+var HandshakeXKhfs = HandshakePattern{
+	Name:                 "XKhfs",
+	ResponderPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternDHES},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1},
+		{MessagePatternS, MessagePatternDHSE},
+	},
+}
+
+var HandshakeIKhfs = HandshakePattern{
+	Name:                 "IKhfs",
+	ResponderPreMessages: []MessagePattern{MessagePatternS},
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternDHES, MessagePatternS, MessagePatternDHSS},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE},
+	},
+}
+
+var HandshakeIXhfs = HandshakePattern{
+	Name: "IXhfs",
+	Messages: [][]MessagePattern{
+		{MessagePatternE, MessagePatternE1, MessagePatternS},
+		{MessagePatternE, MessagePatternDHEE, MessagePatternEKEM1, MessagePatternDHSE, MessagePatternS, MessagePatternDHES},
+	},
+}
