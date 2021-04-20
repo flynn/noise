@@ -178,7 +178,9 @@ func writeHandshake(out io.Writer, cs CipherSuite, h HandshakePattern, pskPlacem
 	payload0 := []byte("yellowsubmarine")
 	payload1 := []byte("submarineyellow")
 	fmt.Fprintf(out, "msg_%d_payload=%x\n", len(h.Messages), payload0)
-	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages), cs0.Encrypt(nil, nil, payload0))
+	ciphertext0, _ := cs0.Encrypt(nil, nil, payload0)
+	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages), ciphertext0)
 	fmt.Fprintf(out, "msg_%d_payload=%x\n", len(h.Messages)+1, payload1)
-	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages)+1, cs1.Encrypt(nil, nil, payload1))
+	ciphertext1, _ := cs1.Encrypt(nil, nil, payload1)
+	fmt.Fprintf(out, "msg_%d_ciphertext=%x\n", len(h.Messages)+1, ciphertext1)
 }

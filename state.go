@@ -25,17 +25,19 @@ type CipherState struct {
 	invalid bool
 }
 
+var ErrCipherSuiteCopied = errors.New("noise: CipherSuite has been copied, state is invalid")
+
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
 // authentication tag across the ciphertext and optional authenticated data to
 // out. This method automatically increments the nonce after every call, so
 // messages must be decrypted in the same order.
-func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
+func (s *CipherState) Encrypt(out, ad, plaintext []byte) ([]byte, error) {
 	if s.invalid {
-		panic("noise: CipherSuite has been copied, state is invalid")
+		return nil, ErrCipherSuiteCopied
 	}
 	out = s.c.Encrypt(out, s.n, ad, plaintext)
 	s.n++
-	return out
+	return out, nil
 }
 
 // Decrypt checks the authenticity of the ciphertext and authenticated data and
@@ -44,7 +46,7 @@ func (s *CipherState) Encrypt(out, ad, plaintext []byte) []byte {
 // order that they were encrypted with no missing messages.
 func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 	if s.invalid {
-		panic("noise: CipherSuite has been copied, state is invalid")
+		return nil, ErrCipherSuiteCopied
 	}
 	out, err := s.c.Decrypt(out, s.n, ad, ciphertext)
 	s.n++
@@ -120,14 +122,17 @@ func (s *symmetricState) MixKeyAndHash(data []byte) {
 	s.hasK = true
 }
 
-func (s *symmetricState) EncryptAndHash(out, plaintext []byte) []byte {
+func (s *symmetricState) EncryptAndHash(out, plaintext []byte) ([]byte, error) {
 	if !s.hasK {
 		s.MixHash(plaintext)
-		return append(out, plaintext...)
+		return append(out, plaintext...), nil
 	}
-	ciphertext := s.Encrypt(out, s.h, plaintext)
+	ciphertext, err := s.Encrypt(out, s.h, plaintext)
+	if err != nil {
+		return nil, err
+	}
 	s.MixHash(ciphertext[len(out):])
-	return ciphertext
+	return ciphertext, nil
 }
 
 func (s *symmetricState) DecryptAndHash(out, data []byte) ([]byte, error) {
@@ -340,6 +345,7 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 		return nil, nil, nil, errors.New("noise: message is too long")
 	}
 
+	var err error
 	for _, msg := range s.messagePatterns[s.msgIdx] {
 		switch msg {
 		case MessagePatternE:
@@ -357,7 +363,10 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			if len(s.s.Public) == 0 {
 				return nil, nil, nil, errors.New("noise: invalid state, s.Public is nil")
 			}
-			out = s.ss.EncryptAndHash(out, s.s.Public)
+			out, err = s.ss.EncryptAndHash(out, s.s.Public)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		case MessagePatternDHEE:
 			dh, err := s.ss.cs.DH(s.e.Private, s.re)
 			if err != nil {
@@ -404,7 +413,10 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 	}
 	s.shouldWrite = false
 	s.msgIdx++
-	out = s.ss.EncryptAndHash(out, payload)
+	out, err = s.ss.EncryptAndHash(out, payload)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	if s.msgIdx >= len(s.messagePatterns) {
 		cs1, cs2 := s.ss.Split()
