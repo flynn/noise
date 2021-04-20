@@ -184,7 +184,7 @@ func (NoiseSuite) TestVectors(c *C) {
 				configR.EphemeralKeypair = ephR
 				configI.PeerEphemeral = ephR.Public
 			}
-			if strings.Index(name, "psk") != -1 {
+			if strings.Contains(name, "psk") {
 				configI.PresharedKey = psk
 				configR.PresharedKey = psk
 			}

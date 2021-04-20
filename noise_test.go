@@ -459,6 +459,7 @@ func (NoiseSuite) TestHandshakeRollback(c *C) {
 	c.Assert(err, Not(IsNil))
 	msg[1] = prev
 	res, _, _, err = hsI.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "defg")
 
 	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c5e4dc9545d41b3280f4586a5481829e1e24ec5a0")
@@ -504,6 +505,7 @@ func (NoiseSuite) TestHandshakeRollback_rs(c *C) {
 	c.Assert(err, Not(IsNil))
 	msg[1] = prev
 	res, _, _, err = hsI.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "defg")
 
 	expected, _ := hex.DecodeString("07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cf66fc41515606de81af64a5364fbc0b2cbd71e0837ea590b72b77ae2caaaa93bc19c167c28236a18e0737d395fe95083e41da26a30a8062faf92ed05bbdc36db2369f19b")
@@ -552,6 +554,7 @@ func (NoiseSuite) TestRekey(c *C) {
 	clientMessage := []byte("hello")
 	msg := csI0.Encrypt(nil, nil, clientMessage)
 	res, err := csR0.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(clientMessage), Equals, string(res))
 
 	oldK := csI0.k
@@ -562,11 +565,13 @@ func (NoiseSuite) TestRekey(c *C) {
 	clientMessage = []byte("hello again")
 	msg = csI0.Encrypt(nil, nil, clientMessage)
 	res, err = csR0.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(clientMessage), Equals, string(res))
 
 	serverMessage := []byte("bye")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(serverMessage), Equals, string(res))
 
 	csR1.Rekey()
@@ -575,6 +580,7 @@ func (NoiseSuite) TestRekey(c *C) {
 	serverMessage = []byte("bye bye")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
 	c.Assert(string(serverMessage), Equals, string(res))
 
 	// only rekey one side, test for failure
@@ -582,5 +588,6 @@ func (NoiseSuite) TestRekey(c *C) {
 	serverMessage = []byte("bye again")
 	msg = csR1.Encrypt(nil, nil, serverMessage)
 	res, err = csI1.Decrypt(nil, nil, msg)
+	c.Assert(err, NotNil)
 	c.Assert(string(serverMessage), Not(Equals), string(res))
 }
