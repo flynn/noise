@@ -25,15 +25,24 @@ type CipherState struct {
 	invalid bool
 }
 
+// MaxNonce is the maximum value of n that is allowed. ErrMaxNonce is returned
+// by Encrypt and Decrypt after this has been reached. 2^64-1 is reserved for rekeys.
+const MaxNonce = uint64(math.MaxUint64) - 1
+
+var ErrMaxNonce = errors.New("noise: cipherstate has reached maximum n, a new handshake must be performed")
 var ErrCipherSuiteCopied = errors.New("noise: CipherSuite has been copied, state is invalid")
 
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
 // authentication tag across the ciphertext and optional authenticated data to
 // out. This method automatically increments the nonce after every call, so
-// messages must be decrypted in the same order.
+// messages must be decrypted in the same order. ErrMaxNonce is returned after
+// the maximum nonce of 2^64-2 is reached.
 func (s *CipherState) Encrypt(out, ad, plaintext []byte) ([]byte, error) {
 	if s.invalid {
 		return nil, ErrCipherSuiteCopied
+	}
+	if s.n > MaxNonce {
+		return nil, ErrMaxNonce
 	}
 	out = s.c.Encrypt(out, s.n, ad, plaintext)
 	s.n++
@@ -43,10 +52,14 @@ func (s *CipherState) Encrypt(out, ad, plaintext []byte) ([]byte, error) {
 // Decrypt checks the authenticity of the ciphertext and authenticated data and
 // then decrypts and appends the plaintext to out. This method automatically
 // increments the nonce after every call, messages must be provided in the same
-// order that they were encrypted with no missing messages.
+// order that they were encrypted with no missing messages. ErrMaxNonce is
+// returned after the maximum nonce of 2^64-2 is reached.
 func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 	if s.invalid {
 		return nil, ErrCipherSuiteCopied
+	}
+	if s.n > MaxNonce {
+		return nil, ErrMaxNonce
 	}
 	out, err := s.c.Decrypt(out, s.n, ad, ciphertext)
 	s.n++
@@ -62,6 +75,12 @@ func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 func (s *CipherState) Cipher() Cipher {
 	s.invalid = true
 	return s.c
+}
+
+// Nonce returns the current value of n. This can be used to determine if a
+// new handshake should be performed due to approaching MaxNonce.
+func (s *CipherState) Nonce() uint64 {
+	return s.n
 }
 
 func (s *CipherState) Rekey() {

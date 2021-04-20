@@ -2,6 +2,7 @@ package noise
 
 import (
 	"encoding/hex"
+	"math"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -582,8 +583,13 @@ func (NoiseSuite) TestRekey(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(string(serverMessage), Equals, string(res))
 
+	preNonce := csR1.Nonce()
+
 	csR1.Rekey()
 	csI1.Rekey()
+
+	postNonce := csR1.Nonce()
+	c.Assert(preNonce, Equals, postNonce)
 
 	serverMessage = []byte("bye bye")
 	msg, err = csR1.Encrypt(nil, nil, serverMessage)
@@ -600,4 +606,13 @@ func (NoiseSuite) TestRekey(c *C) {
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, NotNil)
 	c.Assert(string(serverMessage), Not(Equals), string(res))
+
+	// check nonce overflow handling
+	csI1.n = math.MaxUint64
+	msg, err = csI1.Encrypt(nil, nil, nil)
+	c.Assert(err, Equals, ErrMaxNonce)
+	c.Assert(msg, IsNil)
+	msg, err = csI1.Decrypt(nil, nil, nil)
+	c.Assert(err, Equals, ErrMaxNonce)
+	c.Assert(msg, IsNil)
 }
