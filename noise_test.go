@@ -227,19 +227,22 @@ func (NoiseSuite) TestXXRoundtrip(c *C) {
 	c.Assert(string(res), Equals, payload)
 
 	// transport message I -> R
-	msg = csI0.Encrypt(nil, nil, []byte("wubba"))
+	msg, err = csI0.Encrypt(nil, nil, []byte("wubba"))
+	c.Assert(err, IsNil)
 	res, err = csR0.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "wubba")
 
 	// transport message I -> R again
-	msg = csI0.Encrypt(nil, nil, []byte("aleph"))
+	msg, err = csI0.Encrypt(nil, nil, []byte("aleph"))
+	c.Assert(err, IsNil)
 	res, err = csR0.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "aleph")
 
 	// transport message R <- I
-	msg = csR1.Encrypt(nil, nil, []byte("worri"))
+	msg, err = csR1.Encrypt(nil, nil, []byte("worri"))
+	c.Assert(err, IsNil)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "worri")
@@ -280,13 +283,15 @@ func (NoiseSuite) Test_NNpsk0_Roundtrip(c *C) {
 	c.Assert(res, HasLen, 0)
 
 	// transport I -> R
-	msg = csI0.Encrypt(nil, nil, []byte("foo"))
+	msg, err = csI0.Encrypt(nil, nil, []byte("foo"))
+	c.Assert(err, IsNil)
 	res, err = csR0.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "foo")
 
 	// transport R -> I
-	msg = csR1.Encrypt(nil, nil, []byte("bar"))
+	msg, err = csR1.Encrypt(nil, nil, []byte("bar"))
+	c.Assert(err, IsNil)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "bar")
@@ -552,7 +557,8 @@ func (NoiseSuite) TestRekey(c *C) {
 	c.Assert(0, Equals, len(clientHsResult))
 
 	clientMessage := []byte("hello")
-	msg := csI0.Encrypt(nil, nil, clientMessage)
+	msg, err := csI0.Encrypt(nil, nil, clientMessage)
+	c.Assert(err, IsNil)
 	res, err := csR0.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(clientMessage), Equals, string(res))
@@ -563,13 +569,15 @@ func (NoiseSuite) TestRekey(c *C) {
 	csR0.Rekey()
 
 	clientMessage = []byte("hello again")
-	msg = csI0.Encrypt(nil, nil, clientMessage)
+	msg, err = csI0.Encrypt(nil, nil, clientMessage)
+	c.Assert(err, IsNil)
 	res, err = csR0.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(clientMessage), Equals, string(res))
 
 	serverMessage := []byte("bye")
-	msg = csR1.Encrypt(nil, nil, serverMessage)
+	msg, err = csR1.Encrypt(nil, nil, serverMessage)
+	c.Assert(err, IsNil)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(serverMessage), Equals, string(res))
@@ -578,7 +586,8 @@ func (NoiseSuite) TestRekey(c *C) {
 	csI1.Rekey()
 
 	serverMessage = []byte("bye bye")
-	msg = csR1.Encrypt(nil, nil, serverMessage)
+	msg, err = csR1.Encrypt(nil, nil, serverMessage)
+	c.Assert(err, IsNil)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(serverMessage), Equals, string(res))
@@ -586,7 +595,8 @@ func (NoiseSuite) TestRekey(c *C) {
 	// only rekey one side, test for failure
 	csR1.Rekey()
 	serverMessage = []byte("bye again")
-	msg = csR1.Encrypt(nil, nil, serverMessage)
+	msg, err = csR1.Encrypt(nil, nil, serverMessage)
+	c.Assert(err, IsNil)
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, NotNil)
 	c.Assert(string(serverMessage), Not(Equals), string(res))
