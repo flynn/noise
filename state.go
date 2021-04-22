@@ -359,21 +359,45 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			}
 			out = s.ss.EncryptAndHash(out, s.s.Public)
 		case MessagePatternDHEE:
-			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
+			dh, err := s.ss.cs.DH(s.e.Private, s.re)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.ss.MixKey(dh)
 		case MessagePatternDHES:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				dh, err := s.ss.cs.DH(s.e.Private, s.rs)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				dh, err := s.ss.cs.DH(s.s.Private, s.re)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			}
 		case MessagePatternDHSE:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				dh, err := s.ss.cs.DH(s.s.Private, s.re)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				dh, err := s.ss.cs.DH(s.e.Private, s.rs)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
+			dh, err := s.ss.cs.DH(s.s.Private, s.rs)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.ss.MixKey(dh)
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
@@ -447,21 +471,45 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 			}
 			message = message[expected:]
 		case MessagePatternDHEE:
-			s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.re))
+			dh, err := s.ss.cs.DH(s.e.Private, s.re)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.ss.MixKey(dh)
 		case MessagePatternDHES:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				dh, err := s.ss.cs.DH(s.e.Private, s.rs)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				dh, err := s.ss.cs.DH(s.s.Private, s.re)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			}
 		case MessagePatternDHSE:
 			if s.initiator {
-				s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.re))
+				dh, err := s.ss.cs.DH(s.s.Private, s.re)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			} else {
-				s.ss.MixKey(s.ss.cs.DH(s.e.Private, s.rs))
+				dh, err := s.ss.cs.DH(s.e.Private, s.rs)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				s.ss.MixKey(dh)
 			}
 		case MessagePatternDHSS:
-			s.ss.MixKey(s.ss.cs.DH(s.s.Private, s.rs))
+			dh, err := s.ss.cs.DH(s.s.Private, s.rs)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			s.ss.MixKey(dh)
 		case MessagePatternPSK:
 			s.ss.MixKeyAndHash(s.psk)
 		}
