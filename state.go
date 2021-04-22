@@ -62,8 +62,11 @@ func (s *CipherState) Decrypt(out, ad, ciphertext []byte) ([]byte, error) {
 		return nil, ErrMaxNonce
 	}
 	out, err := s.c.Decrypt(out, s.n, ad, ciphertext)
+	if err != nil {
+		return nil, err
+	}
 	s.n++
-	return out, err
+	return out, nil
 }
 
 // Cipher returns the low-level symmetric encryption primitive. It should only
