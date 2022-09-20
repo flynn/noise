@@ -1,5 +1,14 @@
 package noise
 
+/*
+#cgo LDFLAGS: -L ./lib/ -lcrypto
+#cgo LDFLAGS: -L ./lib/ -lssl
+#cgo CFLAGS: -I ./include/
+#include "openssl/evp.h"
+#include "openssl/aes.h"
+*/
+import "C"
+
 import (
 	"crypto/aes"
 	"crypto/cipher"
@@ -9,6 +18,7 @@ import (
 	"encoding/binary"
 	"hash"
 	"io"
+	"unsafe"
 
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
@@ -146,6 +156,7 @@ func cipherAESGCM(k [32]byte) Cipher {
 	if err != nil {
 		panic(err)
 	}
+
 	return aeadCipher{
 		gcm,
 		func(n uint64) []byte {
@@ -153,6 +164,33 @@ func cipherAESGCM(k [32]byte) Cipher {
 			binary.BigEndian.PutUint64(nonce[4:], n)
 			return nonce[:]
 		},
+		k,
+		"AESGCM",
+	}
+}
+
+// CipherAESGCM is the AES256-GCM AEAD cipher.
+var CipherAESGCMFIPS CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
+
+func cipherAESGCMFIPS(k [32]byte) Cipher {
+	c, err := aes.NewCipher(k[:])
+	if err != nil {
+		panic(err)
+	}
+	gcm, err := cipher.NewGCM(c)
+	if err != nil {
+		panic(err)
+	}
+
+	return aeadCipher{
+		gcm,
+		func(n uint64) []byte {
+			var nonce [12]byte
+			binary.BigEndian.PutUint64(nonce[4:], n)
+			return nonce[:]
+		},
+		k,
+		"AESGCMFIPS",
 	}
 }
 
@@ -171,20 +209,114 @@ func cipherChaChaPoly(k [32]byte) Cipher {
 			binary.LittleEndian.PutUint64(nonce[4:], n)
 			return nonce[:]
 		},
+		k,
+		"ChaChaPoly",
 	}
 }
 
 type aeadCipher struct {
 	cipher.AEAD
 	nonce func(uint64) []byte
+	key   [32]byte
+	name  string
+}
+
+type (
+	Ctx *C.EVP_CIPHER_CTX
+)
+
+func get_Ctx() Ctx {
+	return C.EVP_CIPHER_CTX_new()
 }
 
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	return c.Seal(out, c.nonce(n), plaintext, ad)
+	if c.name == "AESGCMFIPS" {
+		var tempLength int = 0
+		//var output []byte = make([]byte, 1024)
+		var outputLength int = 0
+		var inputArray []byte = []byte(plaintext)
+		var inputLength int = len(inputArray)
+
+		//fmt.Println("********* ENCRYPT *********")
+
+		pInput := (*C.uchar)(&inputArray[0])
+		// fmt.Printf("Original: %s\n", string(inputArray))
+		// fmt.Printf("Original Length: %d\n", len(inputArray))
+
+		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[:]))))
+		defer C.free((unsafe.Pointer)(pKey))
+		// fmt.Printf("UChar* key = %s", key)
+
+		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[0:15]))))
+		defer C.free((unsafe.Pointer)(pIv))
+		// fmt.Printf("UChar* iv =  %s\n", iv)
+
+		var ctx Ctx = get_Ctx()
+		// fmt.Printf("Context made\n")
+
+		C.EVP_EncryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
+		// fmt.Printf("Encrypt Init\n")
+
+		_ = C.EVP_EncryptUpdate(ctx, (*C.uchar)(&out[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
+		// fmt.Printf("Update Value: %d\n", value)
+
+		_ = C.EVP_EncryptFinal_ex(ctx, (*C.uchar)(&out[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
+		// fmt.Printf("Final Value: %d\n", value)
+
+		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
+		C.EVP_CIPHER_CTX_free(ctx)
+		// fmt.Printf("Freed\n")
+
+		return out
+	} else {
+		return c.Seal(out, c.nonce(n), plaintext, ad)
+	}
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	return c.Open(out, c.nonce(n), ciphertext, ad)
+	if c.name == "AESGCMFIPS" {
+		var inputLength int = len(ciphertext)
+		var tempLength int = 0
+		//var output []byte = make([]byte, 1024)
+		var outputLength int = 0
+
+		// TODO: Need error detection
+		// fmt.Println("********* DECRYPT *********")
+
+		pInput := (*C.uchar)(unsafe.Pointer(&ciphertext[0]))
+
+		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[:]))))
+		defer C.free((unsafe.Pointer)(pKey))
+		// fmt.Printf("UChar* key = %s", key)
+
+		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[0:15]))))
+		defer C.free((unsafe.Pointer)(pIv))
+		// fmt.Printf("UChar* iv =  %s\n", iv)
+
+		var ctx Ctx = get_Ctx()
+		// fmt.Printf("Context made\n")
+
+		C.EVP_DecryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
+		// fmt.Printf("Decrypt Init\n")
+
+		// fmt.Printf("Input Buffer: \n%s\n", string(ciphertext))
+
+		_ = C.EVP_DecryptUpdate(ctx, (*C.uchar)(&out[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
+		// fmt.Printf("Input Length = %d\nOutput Length = %d\n", inputLength, outputLength)
+		// fmt.Printf("Update Value: %d\n", value)
+
+		_ = C.EVP_DecryptFinal_ex(ctx, (*C.uchar)(&out[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
+		// fmt.Printf("Final Value: %d\n", value)
+
+		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
+
+		C.EVP_CIPHER_CTX_free(ctx)
+		// fmt.Printf("Freed\n")
+
+		return out, nil
+	} else {
+		return c.Open(out, c.nonce(n), ciphertext, ad)
+	}
 }
 
 type hashFn struct {
