@@ -1,4 +1,4 @@
-module github.com/flynn/noise
+module github.com/cipherloc/noise
 
 go 1.16
 
