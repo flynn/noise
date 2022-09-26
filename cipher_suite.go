@@ -230,7 +230,7 @@ func get_Ctx() Ctx {
 }
 
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	if c.name == "AESGCMFIPS" {
+	if c.name != "AESGCMFIPS" {
 		var tempLength int = 0
 		//var output []byte = make([]byte, 1024)
 		var outputLength int = 0
@@ -274,7 +274,7 @@ func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	if c.name == "AESGCMFIPS" {
+	if c.name != "AESGCMFIPS" {
 		var inputLength int = len(ciphertext)
 		var tempLength int = 0
 		//var output []byte = make([]byte, 1024)
