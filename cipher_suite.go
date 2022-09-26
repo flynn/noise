@@ -229,7 +229,14 @@ func get_Ctx() Ctx {
 	return C.EVP_CIPHER_CTX_new()
 }
 
+var used_e bool = false
+var used_d bool = false
+
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
+	if !used_e (
+		fmt.Printf("ENCRYPTION: %s\n", c.name)
+		used_e = true
+	)
 	if c.name != "AESGCMFIPS" {
 		var tempLength int = 0
 		//var output []byte = make([]byte, 1024)
@@ -274,6 +281,11 @@ func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
+	if !used_d (
+		fmt.Printf("DECRYPTION: %s\n", c.name)
+		used_d = true
+	)
+	
 	if c.name != "AESGCMFIPS" {
 		var inputLength int = len(ciphertext)
 		var tempLength int = 0
