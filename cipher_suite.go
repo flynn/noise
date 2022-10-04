@@ -171,7 +171,7 @@ func cipherAESGCM(k [32]byte) Cipher {
 }
 
 // CipherAESGCM is the AES256-GCM AEAD cipher.
-var CipherAESGCMFIPS CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
+var CipherAESGCMFIPS CipherFunc = cipherFn{cipherAESGCMFIPS, "AESGCM"}
 
 func cipherAESGCMFIPS(k [32]byte) Cipher {
 	c, err := aes.NewCipher(k[:])
@@ -230,18 +230,12 @@ func get_Ctx() Ctx {
 	return C.EVP_CIPHER_CTX_new()
 }
 
-var used_e bool = false
-var used_d bool = false
-
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	if !used_e {
-		fmt.Printf("ENCRYPTION: %s\n", c.name)
-		used_e = true
-	}
-	
-	if c.name != "AESGCMFIPS" {
+	if c.name == "AESGCM" {
+		fmt.Printf("CIPHER: %s\n", c.name)
+		//if c.name == "AESGCMFIPS" {
 		var tempLength int = 0
-		//var output []byte = make([]byte, 1024)
+		var output []byte = make([]byte, 8096)
 		var outputLength int = 0
 		var inputArray []byte = []byte(plaintext)
 		var inputLength int = len(inputArray)
@@ -266,38 +260,44 @@ func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 		C.EVP_EncryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
 		// fmt.Printf("Encrypt Init\n")
 
-		_ = C.EVP_EncryptUpdate(ctx, (*C.uchar)(&out[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
+		_ = C.EVP_EncryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
 		// fmt.Printf("Update Value: %d\n", value)
 
-		_ = C.EVP_EncryptFinal_ex(ctx, (*C.uchar)(&out[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
+		_ = C.EVP_EncryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
 		// fmt.Printf("Final Value: %d\n", value)
 
 		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
 		C.EVP_CIPHER_CTX_free(ctx)
 		// fmt.Printf("Freed\n")
 
-		return out
+		output = output[0 : outputLength+tempLength]
+
+		ciphertext := c.Seal(out, c.nonce(n), output, ad)
+
+		fmt.Printf("ENCRYPTION: %s\n", c.name)
+		return ciphertext
 	} else {
+		fmt.Printf("ENCRYPTION: %s\n", c.name)
 		return c.Seal(out, c.nonce(n), plaintext, ad)
 	}
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	if !used_d {
-		fmt.Printf("DECRYPTION: %s\n", c.name)
-		used_d = true
-	}
-	
-	if c.name != "AESGCMFIPS" {
-		var inputLength int = len(ciphertext)
+	fmt.Printf("CIPHER: %s\n", c.name)
+	if c.name == "AESGCM" {
+		ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		}
+		var inputLength int = len(ctext)
 		var tempLength int = 0
-		//var output []byte = make([]byte, 1024)
+		var output []byte = make([]byte, 8096)
 		var outputLength int = 0
 
 		// TODO: Need error detection
 		// fmt.Println("********* DECRYPT *********")
 
-		pInput := (*C.uchar)(unsafe.Pointer(&ciphertext[0]))
+		pInput := (*C.uchar)(unsafe.Pointer(&ctext[0]))
 
 		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[:]))))
 		defer C.free((unsafe.Pointer)(pKey))
@@ -315,11 +315,11 @@ func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte
 
 		// fmt.Printf("Input Buffer: \n%s\n", string(ciphertext))
 
-		_ = C.EVP_DecryptUpdate(ctx, (*C.uchar)(&out[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
+		_ = C.EVP_DecryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
 		// fmt.Printf("Input Length = %d\nOutput Length = %d\n", inputLength, outputLength)
 		// fmt.Printf("Update Value: %d\n", value)
 
-		_ = C.EVP_DecryptFinal_ex(ctx, (*C.uchar)(&out[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
+		_ = C.EVP_DecryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
 		// fmt.Printf("Final Value: %d\n", value)
 
 		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
@@ -327,8 +327,12 @@ func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte
 		C.EVP_CIPHER_CTX_free(ctx)
 		// fmt.Printf("Freed\n")
 
-		return out, nil
+		output = output[0 : outputLength+tempLength]
+
+		fmt.Printf("DECRYPTION: %s\n", c.name)
+		return output, nil
 	} else {
+		fmt.Printf("DECRYPTION: %s\n", c.name)
 		return c.Open(out, c.nonce(n), ciphertext, ad)
 	}
 }
