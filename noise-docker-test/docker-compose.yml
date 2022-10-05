@@ -1,0 +1,51 @@
+version: "3"
+
+services:
+  test-1:
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ../../out:/out
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    devices:
+      - /dev/net/tun
+    networks:
+      testnetwork:
+        ipv4_address: 10.1.0.100
+
+  test-2:
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ../../out:/out
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    devices:
+      - /dev/net/tun
+    networks:
+      testnetwork:
+        ipv4_address: 10.1.0.102
+
+  test-3:
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ../../out:/out
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    devices:
+      - /dev/net/tun
+    networks:
+      testnetwork:
+        ipv4_address: 10.1.0.103
+
+networks:
+  testnetwork:
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.1.0.0/24
