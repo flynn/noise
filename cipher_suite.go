@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"runtime"
 	"unsafe"
 
 	"golang.org/x/crypto/blake2b"
@@ -232,12 +231,11 @@ func get_Ctx() Ctx {
 }
 
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	buf := make([]byte, 8096)
-	length := runtime.Stack(buf, false)
-	fmt.Printf("Stack: %s\n", string(buf[0:length]))
 
-	if c.name == "AESGCM" {
-		fmt.Printf("CIPHER WITH STACK: %s\n", c.name)
+	//fmt.Printf("PLAINTEXT:\n%s\n", string(plaintext))
+
+	if c.name == "AESGCMFIPS" {
+		//fmt.Printf("CIPHER WITH STACK: %s\n", c.name)
 		var tempLength int = 0
 		var output []byte = make([]byte, 8096)
 		var outputLength int = 0
@@ -276,27 +274,35 @@ func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 
 		output = output[0 : outputLength+tempLength]
 
+		fmt.Printf("FIPSTEXT:\n%s\n", string(output))
+
 		ciphertext := c.Seal(out, c.nonce(n), output, ad)
 
-		fmt.Printf("ENCRYPTION: %s\n", c.name)
+		//fmt.Printf("CIPHERTEXT:\n%s\n", string(ciphertext))
+
+		//fmt.Printf("ENCRYPTION: %s\n", c.name)
+
 		return ciphertext
-	} else {
-		fmt.Printf("ENCRYPTION NO FIPS: %s\n", c.name)
-		return c.Seal(out, c.nonce(n), plaintext, ad)
 	}
+
+	return c.Seal(out, c.nonce(n), plaintext, ad)
+
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	fmt.Printf("CIPHER WITH STACK: %s\n", c.name)
-	buf := make([]byte, 8096)
-	length := runtime.Stack(buf, false)
-	fmt.Printf("Stack: %s\n", string(buf[0:length]))
 
-	if c.name == "AESGCM" {
-		ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-		}
+	//fmt.Printf("CIPHERTEXT:\n%s\n", string(ciphertext))
+
+	ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
+	if err != nil {
+		return ctext, err
+		//fmt.Printf("Error: %v\n", err)
+	}
+
+	//fmt.Printf("CTEXT:\n%s\n", string(ctext))
+
+	if c.name == "AESGCMFIPS" {
+
 		var inputLength int = len(ctext)
 		var tempLength int = 0
 		var output []byte = make([]byte, 8096)
@@ -337,12 +343,13 @@ func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte
 
 		output = output[0 : outputLength+tempLength]
 
-		fmt.Printf("DECRYPTION: %s\n", c.name)
+		//fmt.Printf("PLAINTEXT:\n%s\n", string(output))
+
+		//fmt.Printf("DECRYPTION: %s\n", c.name)
 		return output, nil
-	} else {
-		fmt.Printf("DECRYPTION NO FIPS: %s\n", c.name)
-		return c.Open(out, c.nonce(n), ciphertext, ad)
 	}
+
+	return ctext, err
 }
 
 type hashFn struct {

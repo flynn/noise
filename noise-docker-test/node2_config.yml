@@ -5,8 +5,8 @@
 pki:
   # The CAs that are accepted by this node. Must contain one or more certificates created by 'nebula-cert ca'
   ca: ./ca.crt
-  cert: ./node2.crt
-  key: ./node2.key
+  cert: ./test-3.crt
+  key: ./test-3.key
   # blocklist is a list of certificate fingerprints that we will refuse to talk to
   #blocklist:
   #  - c99d4e650533b92061b09918e838a5a0a6aaee21eed1d12fd937682865936c72
@@ -19,7 +19,7 @@ pki:
 #   "{nebula ip}": ["{routable ip/dns name}:{routable port}"]
 # Example, if your lighthouse has the nebula IP of 192.168.100.1 and has the real ip address of 100.64.22.11 and runs on port 4242:
 static_host_map:
-  "192.168.100.1": ["10.1.0.100:4242"]
+  "192.168.100.1": ["test-1:4242"]
 
 
 lighthouse:
@@ -133,6 +133,8 @@ punchy:
 
 # Cipher allows you to choose between the available ciphers for your network. Options are chachapoly or aes
 # IMPORTANT: this value must be identical on ALL NODES/LIGHTHOUSES. We do not/will not support use of different ciphers simultaneously!
+#cipher: fips-aes
+#cipher: chachapoly
 cipher: aes
 
 # Preferred ranges is used to define a hint about the local network ranges, which speeds up discovering the fastest

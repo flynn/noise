@@ -19,7 +19,7 @@ pki:
 #   "{nebula ip}": ["{routable ip/dns name}:{routable port}"]
 # Example, if your lighthouse has the nebula IP of 192.168.100.1 and has the real ip address of 100.64.22.11 and runs on port 4242:
 static_host_map:
-  "192.168.100.1": ["10.1.0.100:4242"]
+  #"192.168.100.1": ["10.1.0.100:4242"]
 
 
 lighthouse:
@@ -134,6 +134,8 @@ punchy:
 # Cipher allows you to choose between the available ciphers for your network. Options are chachapoly or aes
 # IMPORTANT: this value must be identical on ALL NODES/LIGHTHOUSES. We do not/will not support use of different ciphers simultaneously!
 #cipher: chachapoly
+#cipher: fips-aes
+cipher: aes
 
 # Preferred ranges is used to define a hint about the local network ranges, which speeds up discovering the fastest
 # path to a network adjacent nebula node.
@@ -285,18 +287,12 @@ firewall:
   inbound:
     # Allow icmp between any nebula hosts
     - port: any
-      proto: icmp
+      proto: any
       host: any
 
     # Allow tcp/443 from any host with BOTH laptop and home group
     - port: 443
       proto: tcp
-      groups:
-        - laptop
-        - home
-
-    - port: 5201
-      proto: any
       groups:
         - laptop
         - home
