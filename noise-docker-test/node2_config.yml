@@ -5,8 +5,8 @@
 pki:
   # The CAs that are accepted by this node. Must contain one or more certificates created by 'nebula-cert ca'
   ca: ./ca.crt
-  cert: ./test-3.crt
-  key: ./test-3.key
+  cert: ./node2.crt
+  key: ./node2.key
   # blocklist is a list of certificate fingerprints that we will refuse to talk to
   #blocklist:
   #  - c99d4e650533b92061b09918e838a5a0a6aaee21eed1d12fd937682865936c72
@@ -19,7 +19,7 @@ pki:
 #   "{nebula ip}": ["{routable ip/dns name}:{routable port}"]
 # Example, if your lighthouse has the nebula IP of 192.168.100.1 and has the real ip address of 100.64.22.11 and runs on port 4242:
 static_host_map:
-  "192.168.100.1": ["test-1:4242"]
+  "192.168.100.1": ["10.1.0.100:4242"]
 
 
 lighthouse:
@@ -32,7 +32,7 @@ lighthouse:
   #dns:
     # The DNS host defines the IP to bind the dns listener to. This also allows binding to the nebula node IP.
     #host: 0.0.0.0
-    #port: 53
+    #port: 53 
   # interval is the number of seconds between updates from this node to a lighthouse.
   # during updates, a node sends information about its current IP addresses to each node.
   interval: 60

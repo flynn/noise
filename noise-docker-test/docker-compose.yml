@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  test-1:
+  lighthouse1:
     cap_add:
       - NET_ADMIN
     volumes:
@@ -15,7 +15,7 @@ services:
       testnetwork:
         ipv4_address: 10.1.0.100
 
-  test-2:
+  node1:
     cap_add:
       - NET_ADMIN
     volumes:
@@ -29,7 +29,7 @@ services:
       testnetwork:
         ipv4_address: 10.1.0.102
 
-  test-3:
+  node2:
     cap_add:
       - NET_ADMIN
     volumes:

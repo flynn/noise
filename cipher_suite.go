@@ -79,6 +79,9 @@ type Cipher interface {
 	// then decrypts the provided ciphertext using the provided nonce and
 	// appends it to out.
 	Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error)
+
+	Key() [32]byte
+	Name() string
 }
 
 // A CipherSuite is a set of cryptographic primitives used in a Noise protocol.
@@ -88,6 +91,7 @@ type CipherSuite interface {
 	CipherFunc
 	HashFunc
 	Name() []byte
+	CipherName() string
 }
 
 // NewCipherSuite returns a CipherSuite constructed from the specified
@@ -98,6 +102,7 @@ func NewCipherSuite(dh DHFunc, c CipherFunc, h HashFunc) CipherSuite {
 		CipherFunc: c,
 		HashFunc:   h,
 		name:       []byte(dh.DHName() + "_" + c.CipherName() + "_" + h.HashName()),
+		CName:      c.CipherName(),
 	}
 }
 
@@ -105,10 +110,13 @@ type ciphersuite struct {
 	DHFunc
 	CipherFunc
 	HashFunc
-	name []byte
+	name  []byte
+	CName string
 }
 
 func (s ciphersuite) Name() []byte { return s.name }
+
+func (s ciphersuite) CipherName() string { return s.CName }
 
 // DH25519 is the Curve25519 ECDH function.
 var DH25519 DHFunc = dh25519{}
@@ -226,55 +234,62 @@ type (
 	Ctx *C.EVP_CIPHER_CTX
 )
 
-func get_Ctx() Ctx {
+func Get_Ctx() Ctx {
 	return C.EVP_CIPHER_CTX_new()
 }
+
+func (c aeadCipher) Key() [32]byte { return c.key }
+
+func (c aeadCipher) Name() string { return c.name }
 
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 
 	//fmt.Printf("PLAINTEXT:\n%s\n", string(plaintext))
+	//fmt.Println("********* ENCRYPT *********")
+	//fmt.Printf("ENCRYPTION: %s\n", c.name)
 
-	if c.name == "AESGCMFIPS" {
+	if len(plaintext) > 0 && c.name == "AESGCMFIPS" {
 		//fmt.Printf("CIPHER WITH STACK: %s\n", c.name)
 		var tempLength int = 0
 		var output []byte = make([]byte, 8096)
 		var outputLength int = 0
 		var inputArray []byte = []byte(plaintext)
 		var inputLength int = len(inputArray)
+		var key [32]byte = c.Key()
 
 		//fmt.Println("********* ENCRYPT *********")
 
-		pInput := (*C.uchar)(&inputArray[0])
+		pInput := (*C.uchar)(unsafe.Pointer(&inputArray[0]))
 		// fmt.Printf("Original: %s\n", string(inputArray))
 		// fmt.Printf("Original Length: %d\n", len(inputArray))
 
-		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[:]))))
+		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(key[:]))))
 		defer C.free((unsafe.Pointer)(pKey))
 		// fmt.Printf("UChar* key = %s", key)
 
-		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[0:15]))))
+		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(key[0:15]))))
 		defer C.free((unsafe.Pointer)(pIv))
-		// fmt.Printf("UChar* iv =  %s\n", iv)
+		//fmt.Printf("UChar* iv =  %\n", pIv)
 
-		var ctx Ctx = get_Ctx()
-		// fmt.Printf("Context made\n")
+		var ctx Ctx = Get_Ctx()
+		//fmt.Printf("Context made\n")
 
 		C.EVP_EncryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
-		// fmt.Printf("Encrypt Init\n")
+		//fmt.Printf("Encrypt Init\n")
 
 		_ = C.EVP_EncryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
-		// fmt.Printf("Update Value: %d\n", value)
+		//fmt.Printf("Update Value: %d\n", value)
 
 		_ = C.EVP_EncryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
-		// fmt.Printf("Final Value: %d\n", value)
+		//fmt.Printf("Final Value: %d\n", value)
 
 		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
 		C.EVP_CIPHER_CTX_free(ctx)
-		// fmt.Printf("Freed\n")
+		//fmt.Printf("Freed\n")
 
 		output = output[0 : outputLength+tempLength]
 
-		fmt.Printf("FIPSTEXT:\n%s\n", string(output))
+		//fmt.Printf("FIPSTEXT:\n%s\n", string(output))
 
 		ciphertext := c.Seal(out, c.nonce(n), output, ad)
 
@@ -283,73 +298,75 @@ func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 		//fmt.Printf("ENCRYPTION: %s\n", c.name)
 
 		return ciphertext
+	} else {
+		return c.Seal(out, c.nonce(n), plaintext, ad)
 	}
 
-	return c.Seal(out, c.nonce(n), plaintext, ad)
-
+	//return c.Seal(out, c.nonce(n), plaintext, ad)
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
 
 	//fmt.Printf("CIPHERTEXT:\n%s\n", string(ciphertext))
 
+	//fmt.Println("********* DECRYPT *********")
+	//fmt.Printf("DECRYPTION: %s\n", c.name)
+
 	ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
 	if err != nil {
+		fmt.Printf("Error: %v\n", err)
 		return ctext, err
-		//fmt.Printf("Error: %v\n", err)
 	}
 
 	//fmt.Printf("CTEXT:\n%s\n", string(ctext))
 
-	if c.name == "AESGCMFIPS" {
+	if len(ctext) > 0 && c.name == "AESGCMFIPS" {
 
 		var inputLength int = len(ctext)
 		var tempLength int = 0
 		var output []byte = make([]byte, 8096)
 		var outputLength int = 0
+		var key [32]byte = c.Key()
 
 		// TODO: Need error detection
 		// fmt.Println("********* DECRYPT *********")
 
 		pInput := (*C.uchar)(unsafe.Pointer(&ctext[0]))
 
-		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[:]))))
+		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(key[:]))))
 		defer C.free((unsafe.Pointer)(pKey))
-		// fmt.Printf("UChar* key = %s", key)
+		//fmt.Printf("UChar* key = %v", pKey)
 
-		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(c.key[0:15]))))
+		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(key[0:15]))))
 		defer C.free((unsafe.Pointer)(pIv))
-		// fmt.Printf("UChar* iv =  %s\n", iv)
+		//fmt.Printf("UChar* iv =  %v\n", pIv)
 
-		var ctx Ctx = get_Ctx()
-		// fmt.Printf("Context made\n")
+		var ctx Ctx = Get_Ctx()
+		//fmt.Printf("Context made\n")
 
 		C.EVP_DecryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
-		// fmt.Printf("Decrypt Init\n")
-
-		// fmt.Printf("Input Buffer: \n%s\n", string(ciphertext))
+		//fmt.Printf("Decrypt Init\n")
 
 		_ = C.EVP_DecryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
 		// fmt.Printf("Input Length = %d\nOutput Length = %d\n", inputLength, outputLength)
-		// fmt.Printf("Update Value: %d\n", value)
+		//fmt.Printf("Update Value: %d\n", value)
 
 		_ = C.EVP_DecryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
-		// fmt.Printf("Final Value: %d\n", value)
+		//fmt.Printf("Final Value: %d\n", value)
 
 		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
 
 		C.EVP_CIPHER_CTX_free(ctx)
-		// fmt.Printf("Freed\n")
+		//fmt.Printf("Freed\n")
 
 		output = output[0 : outputLength+tempLength]
 
 		//fmt.Printf("PLAINTEXT:\n%s\n", string(output))
 
-		//fmt.Printf("DECRYPTION: %s\n", c.name)
 		return output, nil
 	}
 
-	return ctext, err
+	return ctext, nil
 }
 
 type hashFn struct {
