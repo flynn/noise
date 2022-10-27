@@ -5,7 +5,6 @@
 *.so
 *.dylib
 *.code-workspace
-include
 lib
 
 # Test binary, built with `go test -c`
