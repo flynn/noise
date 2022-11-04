@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
-	"fmt"
 	"hash"
 	"io"
 
@@ -145,7 +144,6 @@ func (c cipherFn) CipherName() string       { return c.name }
 
 // CipherAESGCM is the AES256-GCM AEAD cipher.
 var CipherAESGCM CipherFunc = cipherFn{cipherAESGCM, "AESGCM"}
-var CipherAESGCMFIPS CipherFunc = cipherFn{cipherAESGCM, "AESGCMFIPS"}
 
 func cipherAESGCM(k [32]byte) Cipher {
 	c, err := aes.NewCipher(k[:])
@@ -196,23 +194,6 @@ type aeadCipher struct {
 	name  string
 }
 
-func (c aeadCipher) Key() [32]byte { return c.key }
-
-func (c aeadCipher) Name() string { return c.name }
-
-func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	return c.Seal(out, c.nonce(n), plaintext, ad)
-}
-
-func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		return ctext, err
-	}
-
-	return ctext, nil
-}
 
 type hashFn struct {
 	fn   func() hash.Hash

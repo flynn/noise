@@ -13,19 +13,9 @@ import "C"
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
-	"hash"
-	"io"
 	"unsafe"
-
-	"golang.org/x/crypto/blake2b"
-	"golang.org/x/crypto/blake2s"
-	"golang.org/x/crypto/chacha20poly1305"
-	"golang.org/x/crypto/curve25519"
 )
 
 // CipherAESGCM is the AES256-GCM AEAD cipher.
@@ -192,38 +182,3 @@ func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte
 	return ctext, nil
 }
 
-type hashFn struct {
-	fn   func() hash.Hash
-	name string
-}
-
-func (h hashFn) Hash() hash.Hash  { return h.fn() }
-func (h hashFn) HashName() string { return h.name }
-
-// HashSHA256 is the SHA-256 hash function.
-var HashSHA256 HashFunc = hashFn{sha256.New, "SHA256"}
-
-// HashSHA512 is the SHA-512 hash function.
-var HashSHA512 HashFunc = hashFn{sha512.New, "SHA512"}
-
-func blake2bNew() hash.Hash {
-	h, err := blake2b.New512(nil)
-	if err != nil {
-		panic(err)
-	}
-	return h
-}
-
-// HashBLAKE2b is the BLAKE2b hash function.
-var HashBLAKE2b HashFunc = hashFn{blake2bNew, "BLAKE2b"}
-
-func blake2sNew() hash.Hash {
-	h, err := blake2s.New256(nil)
-	if err != nil {
-		panic(err)
-	}
-	return h
-}
-
-// HashBLAKE2s is the BLAKE2s hash function.
-var HashBLAKE2s HashFunc = hashFn{blake2sNew, "BLAKE2s"}
