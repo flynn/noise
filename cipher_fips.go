@@ -5,8 +5,9 @@ package noise
 /*
 #cgo LDFLAGS: -L ./lib/ -lcrypto
 #cgo LDFLAGS: -L ./lib/ -lssl
-#include <openssl/evp.h>
-#include <openssl/aes.h>
+#cgo CFLAGS: -I ./include/
+#include "openssl/evp.h"
+#include "openssl/aes.h"
 */
 import "C"
 
