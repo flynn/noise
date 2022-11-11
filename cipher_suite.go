@@ -68,6 +68,9 @@ type Cipher interface {
 	// then decrypts the provided ciphertext using the provided nonce and
 	// appends it to out.
 	Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error)
+
+	Key() [32]byte
+	Name() string
 }
 
 // A CipherSuite is a set of cryptographic primitives used in a Noise protocol.
@@ -77,6 +80,7 @@ type CipherSuite interface {
 	CipherFunc
 	HashFunc
 	Name() []byte
+	CipherName() string
 }
 
 // NewCipherSuite returns a CipherSuite constructed from the specified
@@ -87,6 +91,7 @@ func NewCipherSuite(dh DHFunc, c CipherFunc, h HashFunc) CipherSuite {
 		CipherFunc: c,
 		HashFunc:   h,
 		name:       []byte(dh.DHName() + "_" + c.CipherName() + "_" + h.HashName()),
+		CName:      c.CipherName(),
 	}
 }
 
@@ -94,10 +99,13 @@ type ciphersuite struct {
 	DHFunc
 	CipherFunc
 	HashFunc
-	name []byte
+	name  []byte
+	CName string
 }
 
 func (s ciphersuite) Name() []byte { return s.name }
+
+func (s ciphersuite) CipherName() string { return s.CName }
 
 // DH25519 is the Curve25519 ECDH function.
 var DH25519 DHFunc = dh25519{}
@@ -146,6 +154,7 @@ func cipherAESGCM(k [32]byte) Cipher {
 	if err != nil {
 		panic(err)
 	}
+
 	return aeadCipher{
 		gcm,
 		func(n uint64) []byte {
@@ -153,6 +162,8 @@ func cipherAESGCM(k [32]byte) Cipher {
 			binary.BigEndian.PutUint64(nonce[4:], n)
 			return nonce[:]
 		},
+		k,
+		"AESGCM",
 	}
 }
 
@@ -171,21 +182,18 @@ func cipherChaChaPoly(k [32]byte) Cipher {
 			binary.LittleEndian.PutUint64(nonce[4:], n)
 			return nonce[:]
 		},
+		k,
+		"ChaChaPoly",
 	}
 }
 
 type aeadCipher struct {
 	cipher.AEAD
 	nonce func(uint64) []byte
+	key   [32]byte
+	name  string
 }
 
-func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
-	return c.Seal(out, c.nonce(n), plaintext, ad)
-}
-
-func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-	return c.Open(out, c.nonce(n), ciphertext, ad)
-}
 
 type hashFn struct {
 	fn   func() hash.Hash
