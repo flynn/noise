@@ -1,3 +1,4 @@
+//go:build fips
 // +build fips
 
 package noise
@@ -5,9 +6,11 @@ package noise
 /*
 #cgo LDFLAGS: -L ./lib/ -lcrypto
 #cgo LDFLAGS: -L ./lib/ -lssl
+#cgo LDFLAGS: -L ./lib/ -lpec
 #cgo CFLAGS: -I ./include/
 #include "openssl/evp.h"
 #include "openssl/aes.h"
+#include "engine_ex.h"
 */
 import "C"
 
@@ -52,79 +55,60 @@ func Get_Ctx() Ctx {
 	return C.EVP_CIPHER_CTX_new()
 }
 
+func EncryptPEC(key string, input []byte) []byte {
+	// BRIDGE GO VARS TO C VARS
+	pKey := (*C.uchar)(unsafe.Pointer(C.CString(key)))
+	keyLength := C.uint64_t(len(key))
+	pInput := (*C.uchar)(unsafe.Pointer(&input[0]))
+	inputLength := C.uint64_t(len(input))
+	outputArray := make([]byte, 8096)
+	outputLength := C.uint64_t(0)
+	pOutput := (*C.uchar)(unsafe.Pointer(&outputArray[0]))
+	pOutputLength := (*C.uint64_t)(unsafe.Pointer(&outputLength))
+
+	C.EncryptText_GO(pKey, keyLength, pInput, inputLength, pOutput, pOutputLength)
+
+	// TRIM ARRAY
+	return outputArray[0:outputLength]
+}
+
+func DecryptPEC(key string, input []byte) []byte {
+	// BRIDGE GO VARS TO C VARS
+	pKey := (*C.uchar)(unsafe.Pointer(C.CString(key)))
+	keyLength := C.uint64_t(len(key))
+	pInput := (*C.uchar)(unsafe.Pointer(&input[0]))
+	inputLength := C.uint64_t(len(input))
+	outputArray := make([]byte, 8096)
+	outputLength := C.uint64_t(0)
+	pOutput := (*C.uchar)(unsafe.Pointer(&outputArray[0]))
+	pOutputLength := (*C.uint64_t)(unsafe.Pointer(&outputLength))
+
+	C.DecryptText_GO(pKey, keyLength, pInput, inputLength, pOutput, pOutputLength)
+
+	// TRIM ARRAY
+	return outputArray[0:outputLength]
+}
+
 func (c aeadCipher) Key() [32]byte { return c.key }
 
 func (c aeadCipher) Name() string { return c.name }
 
 func (c aeadCipher) Encrypt(out []byte, n uint64, ad, plaintext []byte) []byte {
 
-	//fmt.Printf("PLAINTEXT:\n%s\n", string(plaintext))
-	//fmt.Println("********* ENCRYPT *********")
-	//fmt.Printf("ENCRYPTION: %s\n", c.name)
-
 	if len(plaintext) > 0 && c.name == "AESGCMFIPS" {
-		//fmt.Printf("CIPHER WITH STACK: %s\n", c.name)
-		var tempLength int = 0
-		var output []byte = make([]byte, 8096)
-		var outputLength int = 0
 		var inputArray []byte = []byte(plaintext)
-		var inputLength int = len(inputArray)
-		var key [32]byte = c.Key()
+		var key string = string(c.Key())
 
-		//fmt.Println("********* ENCRYPT *********")
-
-		pInput := (*C.uchar)(unsafe.Pointer(&inputArray[0]))
-		// fmt.Printf("Original: %s\n", string(inputArray))
-		// fmt.Printf("Original Length: %d\n", len(inputArray))
-
-		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(key[:]))))
-		defer C.free((unsafe.Pointer)(pKey))
-		// fmt.Printf("UChar* key = %s", key)
-
-		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(key[0:15]))))
-		defer C.free((unsafe.Pointer)(pIv))
-		//fmt.Printf("UChar* iv =  %\n", pIv)
-
-		var ctx Ctx = Get_Ctx()
-		//fmt.Printf("Context made\n")
-
-		C.EVP_EncryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
-		//fmt.Printf("Encrypt Init\n")
-
-		_ = C.EVP_EncryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
-		//fmt.Printf("Update Value: %d\n", value)
-
-		_ = C.EVP_EncryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
-		//fmt.Printf("Final Value: %d\n", value)
-
-		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
-		C.EVP_CIPHER_CTX_free(ctx)
-		//fmt.Printf("Freed\n")
-
-		output = output[0 : outputLength+tempLength]
-
-		//fmt.Printf("FIPSTEXT:\n%s\n", string(output))
-
+		output := EncryptPEC(string(key), inputArray)
 		ciphertext := c.Seal(out, c.nonce(n), output, ad)
 
-		//fmt.Printf("CIPHERTEXT:\n%s\n", string(ciphertext))
-
-		//fmt.Printf("ENCRYPTION: %s\n", c.name)
-
 		return ciphertext
-	} else {
-		return c.Seal(out, c.nonce(n), plaintext, ad)
 	}
 
-	//return c.Seal(out, c.nonce(n), plaintext, ad)
+	return c.Seal(out, c.nonce(n), plaintext, ad)
 }
 
 func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte, error) {
-
-	//fmt.Printf("CIPHERTEXT:\n%s\n", string(ciphertext))
-
-	//fmt.Println("********* DECRYPT *********")
-	//fmt.Printf("DECRYPTION: %s\n", c.name)
 
 	ctext, err := c.Open(out, c.nonce(n), ciphertext, ad)
 	if err != nil {
@@ -132,54 +116,12 @@ func (c aeadCipher) Decrypt(out []byte, n uint64, ad, ciphertext []byte) ([]byte
 		return ctext, err
 	}
 
-	//fmt.Printf("CTEXT:\n%s\n", string(ctext))
-
 	if len(ctext) > 0 && c.name == "AESGCMFIPS" {
+		var key string = string(c.Key())
 
-		var inputLength int = len(ctext)
-		var tempLength int = 0
-		var output []byte = make([]byte, 8096)
-		var outputLength int = 0
-		var key [32]byte = c.Key()
-
-		// TODO: Need error detection
-		// fmt.Println("********* DECRYPT *********")
-
-		pInput := (*C.uchar)(unsafe.Pointer(&ctext[0]))
-
-		pKey := (*C.uchar)(unsafe.Pointer(C.CString(string(key[:]))))
-		defer C.free((unsafe.Pointer)(pKey))
-		//fmt.Printf("UChar* key = %v", pKey)
-
-		pIv := (*C.uchar)(unsafe.Pointer(C.CString(string(key[0:15]))))
-		defer C.free((unsafe.Pointer)(pIv))
-		//fmt.Printf("UChar* iv =  %v\n", pIv)
-
-		var ctx Ctx = Get_Ctx()
-		//fmt.Printf("Context made\n")
-
-		C.EVP_DecryptInit_ex(ctx, C.EVP_aes_128_gcm(), nil, pKey, pIv)
-		//fmt.Printf("Decrypt Init\n")
-
-		_ = C.EVP_DecryptUpdate(ctx, (*C.uchar)(&output[0]), (*C.int)(unsafe.Pointer(&outputLength)), pInput, (C.int)(inputLength))
-		// fmt.Printf("Input Length = %d\nOutput Length = %d\n", inputLength, outputLength)
-		//fmt.Printf("Update Value: %d\n", value)
-
-		_ = C.EVP_DecryptFinal_ex(ctx, (*C.uchar)(&output[outputLength]), (*C.int)(unsafe.Pointer(&tempLength)))
-		//fmt.Printf("Final Value: %d\n", value)
-
-		// fmt.Printf("TempLength: %d\nTotalLength: %d\n", tempLength, outputLength+tempLength)
-
-		C.EVP_CIPHER_CTX_free(ctx)
-		//fmt.Printf("Freed\n")
-
-		output = output[0 : outputLength+tempLength]
-
-		//fmt.Printf("PLAINTEXT:\n%s\n", string(output))
-
+		output := C.DecryptPEC(key, cText)
 		return output, nil
 	}
 
 	return ctext, nil
 }
-

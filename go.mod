@@ -1,4 +1,4 @@
-module github.com/cipherloc/noise
+module github.com/sidechannelinc/noise
 
 go 1.16
 
