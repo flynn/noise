@@ -241,6 +241,7 @@ type HandshakeState struct {
 	rs              []byte // remote party's static public key
 	re              []byte // remote party's ephemeral public key
 	psk             []byte // preshared key, maybe zero length
+	willPsk         bool   // indicates if preshared key will be used (even if not yet set)
 	messagePatterns [][]MessagePattern
 	shouldWrite     bool
 	initiator       bool
@@ -299,7 +300,6 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		s:               c.StaticKeypair,
 		e:               c.EphemeralKeypair,
 		rs:              c.PeerStatic,
-		psk:             c.PresharedKey,
 		messagePatterns: c.Pattern.Messages,
 		shouldWrite:     c.Initiator,
 		initiator:       c.Initiator,
@@ -313,11 +313,18 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 		copy(hs.re, c.PeerEphemeral)
 	}
 	hs.ss.cs = c.CipherSuite
+
 	pskModifier := ""
-	if len(hs.psk) > 0 {
-		if len(hs.psk) != 32 {
-			return nil, errors.New("noise: specification mandates 256-bit preshared keys")
+	// NB: for psk{0,1} we must have preshared key set in configuration as its needed in the first
+	// message. For psk{2+} we may not know the correct psk yet so it might not be set.
+	if len(c.PresharedKey) > 0 || c.PresharedKeyPlacement >= 2 {
+		hs.willPsk = true
+		if len(c.PresharedKey) > 0 {
+			if err := hs.SetPresharedKey(c.PresharedKey); err != nil {
+				return nil, err
+			}
 		}
+
 		pskModifier = fmt.Sprintf("psk%d", c.PresharedKeyPlacement)
 		hs.messagePatterns = append([][]MessagePattern(nil), hs.messagePatterns...)
 		if c.PresharedKeyPlacement == 0 {
@@ -326,6 +333,7 @@ func NewHandshakeState(c Config) (*HandshakeState, error) {
 			hs.messagePatterns[c.PresharedKeyPlacement-1] = append(hs.messagePatterns[c.PresharedKeyPlacement-1], MessagePatternPSK)
 		}
 	}
+
 	hs.ss.InitializeSymmetric([]byte("Noise_" + c.Pattern.Name + pskModifier + "_" + string(hs.ss.cs.Name())))
 	hs.ss.MixHash(c.Prologue)
 	for _, m := range c.Pattern.InitiatorPreMessages {
@@ -383,7 +391,7 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			s.e = e
 			out = append(out, s.e.Public...)
 			s.ss.MixHash(s.e.Public)
-			if len(s.psk) > 0 {
+			if s.willPsk {
 				s.ss.MixKey(s.e.Public)
 			}
 		case MessagePatternS:
@@ -435,6 +443,9 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 			}
 			s.ss.MixKey(dh)
 		case MessagePatternPSK:
+			if len(s.psk) == 0 {
+				return nil, nil, nil, errors.New("noise: cannot send psk message without psk set")
+			}
 			s.ss.MixKeyAndHash(s.psk)
 		}
 	}
@@ -455,6 +466,15 @@ func (s *HandshakeState) WriteMessage(out, payload []byte) ([]byte, *CipherState
 
 // ErrShortMessage is returned by ReadMessage if a message is not as long as it should be.
 var ErrShortMessage = errors.New("noise: message is too short")
+
+func (s *HandshakeState) SetPresharedKey(psk []byte) error {
+	if len(psk) != 32 {
+		return errors.New("noise: specification mandates 256-bit preshared keys")
+	}
+	s.psk = make([]byte, 32)
+	copy(s.psk, psk)
+	return nil
+}
 
 // ReadMessage processes a received handshake message and appends the payload,
 // if any to out. If the handshake is completed by the call, two CipherStates
@@ -491,7 +511,7 @@ func (s *HandshakeState) ReadMessage(out, message []byte) ([]byte, *CipherState,
 				s.re = s.re[:s.ss.cs.DHLen()]
 				copy(s.re, message)
 				s.ss.MixHash(s.re)
-				if len(s.psk) > 0 {
+				if s.willPsk {
 					s.ss.MixKey(s.re)
 				}
 			case MessagePatternS:
