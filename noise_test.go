@@ -1,6 +1,7 @@
 package noise
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math"
 	"testing"
@@ -247,6 +248,81 @@ func (NoiseSuite) TestXXRoundtrip(c *C) {
 	res, err = csI1.Decrypt(nil, nil, msg)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, "worri")
+}
+
+func (NoiseSuite) Test_IXpsk2_Roundtrip(c *C) {
+	cs := NewCipherSuite(DH25519, CipherAESGCM, HashSHA256)
+	rngI := new(RandomInc)
+	rngR := new(RandomInc)
+	*rngR = 1
+
+	staticI, err := cs.GenerateKeypair(rngI)
+	if err != nil {
+		c.Fatal(err)
+	}
+	staticR, err := cs.GenerateKeypair(rngR)
+	if err != nil {
+		c.Fatal(err)
+	}
+
+	psk := []byte("00000000000000000000000000000000")
+
+	hsI, _ := NewHandshakeState(Config{
+		CipherSuite:           cs,
+		Random:                rngI,
+		Pattern:               HandshakeIX,
+		PresharedKeyPlacement: 2,
+		PresharedKey:          psk,
+		Initiator:             true,
+		StaticKeypair:         staticI,
+	})
+	hsR, _ := NewHandshakeState(Config{
+		CipherSuite:           cs,
+		Random:                rngR,
+		Pattern:               HandshakeIX,
+		PresharedKeyPlacement: 2,
+		StaticKeypair:         staticR,
+	})
+
+	// -> e, s
+	msg, _, _, _ := hsI.WriteMessage(nil, nil)
+	c.Assert(msg, HasLen, 96)
+
+	res, _, _, err := hsR.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(res, HasLen, 0)
+
+	if !bytes.Equal(hsR.PeerStatic(), staticI.Public) {
+		c.Error("wrong public key from peer")
+	}
+
+	// Look up psk from peer static public key
+
+	// responder should know psk now and set it from the
+	// initiators preshared key
+	if err = hsR.SetPresharedKey(psk); err != nil {
+		c.Fatal(err)
+	}
+	// <- e, dhee, dhse, s, dhes, psk
+	msg, csR0, csR1, _ := hsR.WriteMessage(nil, nil)
+	c.Assert(msg, HasLen, 96)
+	res, csI0, csI1, err := hsI.ReadMessage(nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(res, HasLen, 0)
+
+	// transport I -> R
+	msg, err = csI0.Encrypt(nil, nil, []byte("foo"))
+	c.Assert(err, IsNil)
+	res, err = csR0.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "foo")
+
+	// transport R -> I
+	msg, err = csR1.Encrypt(nil, nil, []byte("bar"))
+	c.Assert(err, IsNil)
+	res, err = csI1.Decrypt(nil, nil, msg)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, "bar")
 }
 
 func (NoiseSuite) Test_NNpsk0_Roundtrip(c *C) {
