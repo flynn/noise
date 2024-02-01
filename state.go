@@ -32,6 +32,18 @@ const MaxNonce = uint64(math.MaxUint64) - 1
 var ErrMaxNonce = errors.New("noise: cipherstate has reached maximum n, a new handshake must be performed")
 var ErrCipherSuiteCopied = errors.New("noise: CipherSuite has been copied, state is invalid")
 
+// UnsafeNewCipherState reconstructs a CipherState from exported components.
+// It is important that, when resuming from an exported state, care is taken
+// to synchronize the nonce state and not allow rollbacks.
+func UnsafeNewCipherState(cs CipherSuite, k [32]byte, n uint64) *CipherState {
+	return &CipherState{
+		cs: cs,
+		c:  cs.Cipher(k),
+		k:  k,
+		n:  n,
+	}
+}
+
 // Encrypt encrypts the plaintext and then appends the ciphertext and an
 // authentication tag across the ciphertext and optional authenticated data to
 // out. This method automatically increments the nonce after every call, so
@@ -89,6 +101,13 @@ func (s *CipherState) Nonce() uint64 {
 // SetNonce sets the current value of n.
 func (s *CipherState) SetNonce(n uint64) {
 	s.n = n
+}
+
+// UnsafeKey returns the current value of k. This exports the current key for the
+// CipherState. Intended to be used alongside UnsafeNewCipherState to resume a
+// CipherState at a later point.
+func (s *CipherState) UnsafeKey() [32]byte {
+	return s.k
 }
 
 func (s *CipherState) Rekey() {
