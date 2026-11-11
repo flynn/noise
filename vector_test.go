@@ -9,8 +9,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/require"
 )
 
 func mustHex(s []byte) []byte {
@@ -98,9 +99,9 @@ func init() {
 	}
 }
 
-func (NoiseSuite) TestVectors(c *C) {
+func TestVectors(t *testing.T) {
 	f, err := os.Open("vectors.txt")
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	r := bufio.NewReader(f)
 
 	var hsI, hsR *HandshakeState
@@ -116,14 +117,14 @@ func (NoiseSuite) TestVectors(c *C) {
 		if err == io.EOF {
 			break
 		}
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		if len(bytes.TrimSpace(line)) == 0 || line[0] == '#' {
 			continue
 		}
 
 		splitLine := bytes.SplitN(line, []byte("="), 2)
-		c.Assert(splitLine, HasLen, 2)
+		require.Len(t, splitLine, 2)
 
 		switch string(splitLine[0]) {
 		case "init_static":
@@ -134,7 +135,7 @@ func (NoiseSuite) TestVectors(c *C) {
 			ephR, _ = DH25519.GenerateKeypair(hexReader(splitLine[1]))
 		case "handshake":
 			name = string(splitLine[1])
-			c.Log(name)
+			t.Log(name)
 			configI, configR = Config{Initiator: true}, Config{}
 			hsI, hsR = nil, nil
 			components := strings.SplitN(name, "_", 5)
@@ -200,11 +201,11 @@ func (NoiseSuite) TestVectors(c *C) {
 				enc, dec = csW1, csR1
 			}
 			encrypted, err := enc.Encrypt(nil, nil, payload)
-			c.Assert(err, IsNil)
-			c.Assert(fmt.Sprintf("%x", encrypted), Equals, string(splitLine[1]))
+			require.NoError(t, err)
+			require.Equal(t, string(splitLine[1]), fmt.Sprintf("%x", encrypted))
 			decrypted, err := dec.Decrypt(nil, nil, encrypted)
-			c.Assert(err, IsNil)
-			c.Assert(string(payload), Equals, string(decrypted))
+			require.NoError(t, err)
+			require.Equal(t, string(decrypted), string(payload))
 			payload = nil
 			continue
 		}
@@ -216,10 +217,10 @@ func (NoiseSuite) TestVectors(c *C) {
 
 		var msg, res []byte
 		msg, csW0, csW1, _ = writer.WriteMessage(nil, payload)
-		c.Assert(fmt.Sprintf("%x", msg), Equals, string(splitLine[1]))
+		require.Equal(t, string(splitLine[1]), fmt.Sprintf("%x", msg))
 		res, csR0, csR1, err = reader.ReadMessage(nil, msg)
-		c.Assert(err, IsNil)
-		c.Assert(string(res), Equals, string(payload))
+		require.NoError(t, err)
+		require.Equal(t, string(payload), string(res))
 		payload = nil
 	}
 }
